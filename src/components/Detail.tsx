@@ -164,12 +164,12 @@ export function Detail() {
         <div className="relative" ref={menuRef}>
           <Button
             variant="default"
-            icon="more_horiz"
             disabled={!hasMenu}
             onClick={() => setMenu((v) => !v)}
             title={hasMenu ? "その他の操作" : "操作はありません"}
           >
             操作
+            <Icon name="expand_more" size={16} style={{ opacity: 0.7 }} />
           </Button>
           {menu && hasMenu && (
             <div
