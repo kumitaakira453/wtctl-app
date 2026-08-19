@@ -156,36 +156,24 @@ export function Detail() {
         </div>
       </div>
 
-      {/* アクション: 検証（スキーム）が主。ライフサイクルは「操作」メニュー。 */}
-      <div className="flex shrink-0 items-center gap-2 px-5 pb-4">
+      {/* アクション: 検証と操作を左に隣接配置し、右側にプランのラベルを置く */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 px-5 pb-4">
         <Button variant="primary" icon="play_arrow" onClick={openScheme}>
           検証
         </Button>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <PlanChips plan={plan} />
-        </div>
-        <div className="relative ml-auto" ref={menuRef}>
-          <button
-            type="button"
+        <div className="relative" ref={menuRef}>
+          <Button
+            variant="default"
+            icon="more_horiz"
             disabled={!hasMenu}
             onClick={() => setMenu((v) => !v)}
             title={hasMenu ? "その他の操作" : "操作はありません"}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-medium transition-colors"
-            style={{
-              border: `1px solid ${menu ? "var(--wt-accent)" : "var(--wt-border-strong)"}`,
-              background: menu ? "var(--wt-accent-soft)" : "var(--wt-panel)",
-              color: hasMenu ? "var(--wt-fg-dim)" : "var(--wt-muted)",
-              opacity: hasMenu ? 1 : 0.5,
-              cursor: hasMenu ? "pointer" : "default",
-            }}
           >
-            <Icon name="more_horiz" size={16} />
             操作
-            <Icon name="expand_more" size={14} style={{ opacity: 0.6 }} />
-          </button>
+          </Button>
           {menu && hasMenu && (
             <div
-              className="wt-fade absolute right-0 z-20 mt-1 w-60 overflow-hidden rounded-xl py-1"
+              className="wt-fade absolute left-0 z-20 mt-1 w-60 overflow-hidden rounded-xl py-1"
               style={{ background: "var(--wt-bg)", border: "1px solid var(--wt-border-strong)", boxShadow: "var(--wt-shadow)" }}
             >
               {plan && plan.migrations.length > 0 && (
@@ -204,6 +192,8 @@ export function Detail() {
             </div>
           )}
         </div>
+        <span className="mx-0.5 h-5 w-px" style={{ background: "var(--wt-border)" }} />
+        <PlanChips plan={plan} />
       </div>
 
       {/* 差分ビューア（GitHub 風: コミット → ファイル → diff）で残り領域を埋める */}

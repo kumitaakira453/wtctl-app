@@ -57,8 +57,15 @@ export function TopBar() {
 
   return (
     <div
-      className="wt-drag flex items-center gap-2 px-4"
-      style={{ height: 52, borderBottom: "1px solid var(--wt-border)", background: "var(--wt-bg)" }}
+      data-tauri-drag-region
+      className="wt-drag flex items-center gap-2 pr-4"
+      style={{
+        height: 52,
+        // サイドバー非表示時は macOS の traffic lights と重ならないよう左を空ける
+        paddingLeft: sidebarOpen ? 16 : 84,
+        borderBottom: "1px solid var(--wt-border)",
+        background: "var(--wt-bg)",
+      }}
     >
       {/* 左パネル（worktree 一覧）表示トグル */}
       <IconButton

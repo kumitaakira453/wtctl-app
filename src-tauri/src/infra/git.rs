@@ -304,19 +304,21 @@ impl Git {
         if sha == "WORKING" {
             return self.working_files(worktree);
         }
-        // committed: name-status（種別・パス）と numstat（増減）を突き合わせる
+        // committed: 第1親との 2-way 差分で name-status（種別・パス）と numstat（増減）を取る。
+        // マージコミットで show が出す combined diff（diff --cc / @@@）を避ける。
+        let parent = format!("{sha}^");
         let ns = capture(
             &[
-                "git", "-c", "core.quotePath=false", "-C", worktree, "show", "--format=",
-                "--name-status", "-M", sha,
+                "git", "-c", "core.quotePath=false", "-C", worktree, "diff", "--name-status", "-M",
+                &parent, sha,
             ],
             None,
             false,
         )
         .unwrap_or_default();
         let nums = self.numstat_map(&[
-            "git", "-c", "core.quotePath=false", "-C", worktree, "show", "--format=", "--numstat",
-            "-M", sha,
+            "git", "-c", "core.quotePath=false", "-C", worktree, "diff", "--numstat", "-M",
+            &parent, sha,
         ]);
         let mut files: Vec<FileChange> = Vec::new();
         for line in ns.lines() {
@@ -430,8 +432,10 @@ impl Git {
             )
             .unwrap_or_default();
         }
+        // 第1親との 2-way 差分（マージの combined diff を避ける）
+        let parent = format!("{sha}^");
         capture(
-            &["git", "-c", "core.quotePath=false", "-C", worktree, "show", "--format=", "-M", sha, "--", path],
+            &["git", "-c", "core.quotePath=false", "-C", worktree, "diff", "-M", &parent, sha, "--", path],
             None,
             false,
         )

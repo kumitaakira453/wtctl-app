@@ -11,9 +11,9 @@ function basename(p: string): string {
   return normalizePath(p).split("/").pop() ?? p;
 }
 
-// mount 先は「場所」を示す。健全性（緑）と色が重複しないよう MAIN は中立色にする。
+// mount 先（場所）。MAIN=稼働中の既定 → 緑、WT=差し替え中 → 琥珀。
 const MOUNT_META: Record<MountState, { color: string; label: (m: ServiceMount) => string } | null> = {
-  main: { color: "var(--wt-muted)", label: () => "MAIN" },
+  main: { color: "var(--wt-ok)", label: () => "MAIN" },
   worktree: { color: "var(--wt-warn)", label: (m) => `WT:${basename(m.worktree ?? "")}` },
   down: null,
 };
@@ -98,24 +98,25 @@ export function ContainerList() {
                   style={{ width: 8, height: 8, background: h.color }}
                   title={h.label}
                 />
-                {/* 名前は切り詰めない。メタ情報（port/mount/health）は 2 行目に小さく置く */}
+                {/* 名前は切り詰めない。port/health は 2 行目に小さく置く */}
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="font-mono text-[12.5px] leading-tight" style={{ color: "var(--wt-fg)" }}>
                     {svc}
                   </span>
                   <span className="mt-0.5 flex items-center gap-2 text-[10.5px]" style={{ color: "var(--wt-muted)" }}>
                     <span className="font-mono">{port ? `:${port}` : "—"}</span>
-                    {mount && (
-                      <span
-                        className="rounded px-1.5 py-px font-mono font-semibold"
-                        style={{ color: mount.color, border: `1px solid ${mount.color}` }}
-                      >
-                        {mount.label(m)}
-                      </span>
-                    )}
                     {h.label !== "稼働中" && <span style={{ color: h.color }}>{h.label}</span>}
                   </span>
                 </div>
+                {/* mount ピルは行右端に固定して位置を揃える */}
+                {mount && (
+                  <span
+                    className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold"
+                    style={{ color: mount.color, border: `1px solid ${mount.color}` }}
+                  >
+                    {mount.label(m)}
+                  </span>
+                )}
               </div>
             );
           })}

@@ -43,7 +43,7 @@ export function Sidebar({ onNew, onSettings }: { onNew: () => void; onSettings: 
       className="flex h-full flex-col"
       style={{ width: 320, background: "var(--wt-sidebar)", borderRight: "1px solid var(--wt-border)" }}
     >
-      <div className="wt-drag flex items-center gap-2 px-4 pb-2" style={{ paddingTop: 30 }}>
+      <div data-tauri-drag-region className="wt-drag flex items-center gap-2 px-4 pb-2" style={{ paddingTop: 30 }}>
         <Icon name="account_tree" size={20} style={{ color: "var(--wt-accent)" }} />
         <span className="text-[15px] font-semibold tracking-tight">wtctl</span>
         <div className="ml-auto flex items-center gap-1">

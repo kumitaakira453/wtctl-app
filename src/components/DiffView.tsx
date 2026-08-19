@@ -25,6 +25,8 @@ function parse(diff: string): Row[] {
     }
     if (
       line.startsWith("diff --git") ||
+      line.startsWith("diff --cc") ||
+      line.startsWith("diff --combined") ||
       line.startsWith("index ") ||
       line.startsWith("--- ") ||
       line.startsWith("+++ ") ||
