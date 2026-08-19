@@ -1,4 +1,5 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { langForPath } from "../lib/highlight";
 import { api } from "../lib/ipc";
@@ -156,6 +157,42 @@ function MessageRow({ m }: { m: ClaudeMessage }) {
   );
 }
 
+/// 会話を仮想スクロールで描画（長いセッションでも軽い）。session ごとに remount して
+/// マウント時に最下部（最新）へスクロールする。行の高さは measureElement で動的計測。
+function Transcript({ msgs }: { msgs: ClaudeMessage[] }) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const virt = useVirtualizer({
+    count: msgs.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 120,
+    overscan: 8,
+  });
+
+  useEffect(() => {
+    if (msgs.length) virt.scrollToIndex(msgs.length - 1, { align: "end" });
+    // マウント時のみ最下部へ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const items = virt.getVirtualItems();
+  return (
+    <div ref={parentRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+      <div style={{ height: virt.getTotalSize(), width: "100%", position: "relative" }}>
+        {items.map((vi) => (
+          <div
+            key={vi.key}
+            data-index={vi.index}
+            ref={virt.measureElement}
+            style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vi.start}px)` }}
+          >
+            <MessageRow m={msgs[vi.index]} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /// worktree に紐づく Claude Code セッション一覧と会話（read-only）。
 export function ClaudeSessions({ path }: { path: string }) {
   const [sessions, setSessions] = useState<ClaudeSession[] | null>(null);
@@ -163,14 +200,6 @@ export function ClaudeSessions({ path }: { path: string }) {
   const [msgs, setMsgs] = useState<ClaudeMessage[] | null>(null);
   // 手動再読み込み用。ライブ追尾はしないので進行中セッションはこれで取り直す。
   const [nonce, setNonce] = useState(0);
-  const bodyRef = useRef<HTMLDivElement>(null);
-
-  // セッション選択・再読み込み時は最新（最下部）を表示する
-  useEffect(() => {
-    if (!msgs) return;
-    const el = bodyRef.current;
-    if (el) requestAnimationFrame(() => (el.scrollTop = el.scrollHeight));
-  }, [msgs]);
 
   useEffect(() => {
     let alive = true;
@@ -273,15 +302,13 @@ export function ClaudeSessions({ path }: { path: string }) {
             </button>
           </div>
         )}
-        <div ref={bodyRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-          {msgs === null ? (
-            <div className="flex h-full items-center justify-center">
-              <Spinner size={16} />
-            </div>
-          ) : (
-            msgs.map((m, i) => <MessageRow key={i} m={m} />)
-          )}
-        </div>
+        {msgs === null ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center">
+            <Spinner size={16} />
+          </div>
+        ) : (
+          <Transcript key={`${active}:${nonce}`} msgs={msgs} />
+        )}
       </div>
     </div>
   );
