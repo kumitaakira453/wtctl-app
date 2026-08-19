@@ -219,6 +219,14 @@ fn push_user_text(blocks: &mut Vec<ClaudeBlock>, text: &str) {
         }
         return;
     }
+    // スキル読み込み時に注入される SKILL.md 本文（"Base directory for this skill: …"）は
+    // 丸ごと出さず、スキル名だけ見せて本文は折りたたむ。
+    let trimmed = text.trim_start();
+    if let Some(rest) = trimmed.strip_prefix("Base directory for this skill:") {
+        let name = rest.lines().next().unwrap_or("").trim().rsplit('/').next().unwrap_or("skill").to_string();
+        blocks.push(ClaudeBlock { kind: "skill".into(), text: truncate(trimmed), name: Some(name) });
+        return;
+    }
     if is_human_text(text) {
         blocks.push(ClaudeBlock { kind: "text".into(), text: text.to_string(), name: None });
     }

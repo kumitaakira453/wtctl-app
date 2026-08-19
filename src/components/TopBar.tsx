@@ -106,7 +106,6 @@ export function TopBar() {
     return () => window.removeEventListener("mousedown", onDown);
   }, [stackPop]);
 
-  const feLabel = mainFe.responding ? "稼働中" : mainFe.listening ? "応答なし" : "停止";
   const feColor = mainFe.responding ? "var(--wt-ok)" : mainFe.listening ? "var(--wt-warn)" : "var(--wt-muted)";
 
   return (
@@ -165,7 +164,6 @@ export function TopBar() {
         <span className="inline-block rounded-full" style={{ width: 8, height: 8, background: feColor }} />
         <Icon name="language" size={15} style={{ color: "var(--wt-muted)" }} />
         <span className="text-xs font-medium">FE</span>
-        <span className="text-[10px]" style={{ color: feColor }}>{feLabel}</span>
         <StackToggle
           up={mainFe.listening}
           onStart={() => run("FE 起動", "fe_main", {})}

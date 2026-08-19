@@ -64,6 +64,8 @@ function Block({ b }: { b: ClaudeBlock }) {
           {b.text}
         </div>
       );
+    case "skill":
+      return <Collapsible icon="extension" label={`スキル: ${b.name ?? ""}`} body={b.text} color="var(--wt-accent)" />;
     case "thinking":
       return <Collapsible icon="neurology" label="思考" body={b.text} color="var(--wt-muted)" />;
     case "tool_use":
