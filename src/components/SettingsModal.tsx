@@ -57,23 +57,30 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         {label}
       </div>
       <div className="flex gap-2">
-        <div
-          className="flex min-w-0 flex-1 items-center rounded-lg px-3 font-mono text-[12px]"
-          style={{
-            background: "var(--wt-panel)",
-            border: "1px solid var(--wt-border-strong)",
-            color: value ? "var(--wt-fg)" : "var(--wt-muted)",
-            minHeight: 38,
-          }}
+        {/* 入力欄ではなく「クリックでフォルダ選択」するボタンとして見せる */}
+        <button
+          type="button"
+          onClick={() => pick(setter)}
+          className="group flex min-w-0 flex-1 items-center gap-2 rounded-lg px-3 text-left transition-colors"
+          style={{ background: "var(--wt-panel-2)", border: "1px dashed var(--wt-border-strong)", minHeight: 40 }}
+          title="クリックしてフォルダを選択"
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--wt-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--wt-panel-2)")}
         >
-          <span className="truncate">{value || placeholder}</span>
-        </div>
+          <Icon name="folder_open" size={16} style={{ color: "var(--wt-muted)" }} />
+          <span
+            className="min-w-0 flex-1 truncate font-mono text-[12px]"
+            style={{ color: value ? "var(--wt-fg)" : "var(--wt-muted)" }}
+          >
+            {value || placeholder}
+          </span>
+          <span className="shrink-0 text-[11px]" style={{ color: "var(--wt-accent)" }}>
+            参照
+          </span>
+        </button>
         {clearable && value && (
           <Button icon="close" variant="ghost" onClick={() => setter("")} title="既定に戻す" />
         )}
-        <Button icon="folder_open" variant="default" onClick={() => pick(setter)} title="フォルダを選択">
-          参照
-        </Button>
       </div>
     </div>
   );
