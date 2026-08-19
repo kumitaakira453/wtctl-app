@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { stripAnsi } from "../lib/ansi";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ansiToSegments } from "../lib/ansi";
 import { api, startContainerLogs } from "../lib/ipc";
 import { KNOWN_SERVICES } from "../lib/topology";
 import { Modal } from "./ui";
@@ -58,6 +58,9 @@ export function LogsModal({ initial, onClose }: { initial: string; onClose: () =
     if (el) atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
   };
 
+  // ANSI 色を解釈してセグメント化（本物のターミナル同様に色付け）
+  const segments = useMemo(() => ansiToSegments(lines.join("\n")), [lines]);
+
   return (
     <Modal title="コンテナ ログ" onClose={onClose} width={880}>
       <div className="mb-2 flex flex-wrap items-center gap-1">
@@ -93,7 +96,11 @@ export function LogsModal({ initial, onClose }: { initial: string; onClose: () =
           </div>
         ) : (
           <pre className="log-line" style={{ color: "var(--wt-fg-dim)" }}>
-            {lines.map((l) => stripAnsi(l)).join("\n")}
+            {segments.map((s, i) => (
+              <span key={i} style={{ color: s.color, fontWeight: s.bold ? 600 : undefined }}>
+                {s.text}
+              </span>
+            ))}
           </pre>
         )}
       </div>

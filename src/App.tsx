@@ -7,6 +7,7 @@ import { FirstRun } from "./components/FirstRun";
 import { LogDrawer } from "./components/LogDrawer";
 import { SettingsModal } from "./components/SettingsModal";
 import { Sidebar } from "./components/Sidebar";
+import { StackPanel } from "./components/StackPanel";
 import { TopBar } from "./components/TopBar";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { Spinner } from "./components/ui";
@@ -66,6 +67,7 @@ export default function App() {
               <Sidebar onNew={() => setBranchOpen(true)} onSettings={() => setSettingsOpen(true)} />
               <div className="relative flex min-w-0 flex-1 flex-col">
                 <TopBar />
+                <StackPanel />
                 <div className="min-h-0 flex-1">
                   <Detail />
                 </div>

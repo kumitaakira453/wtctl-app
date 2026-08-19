@@ -132,8 +132,12 @@ export function Sidebar({ onNew, onSettings }: { onNew: () => void; onSettings: 
                   {w.isMain ? "(main)" : w.name}
                 </span>
                 {meta?.dirty && (
-                  <span title="未コミット変更" style={{ color: "var(--wt-warn)", fontSize: 9 }}>
-                    ●
+                  <span
+                    title="未コミット変更あり"
+                    className="rounded px-1 text-[9px] font-bold"
+                    style={{ color: "var(--wt-warn)", background: "color-mix(in srgb, var(--wt-warn) 16%, transparent)" }}
+                  >
+                    変更あり
                   </span>
                 )}
                 <div className="ml-auto flex shrink-0 items-center gap-1">

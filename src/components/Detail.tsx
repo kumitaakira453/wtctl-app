@@ -16,8 +16,6 @@ import {
   vitesAtom,
   worktreesAtom,
 } from "../state/atoms";
-import { ContainerList } from "./ContainerList";
-import { FePanel } from "./FePanel";
 import { Icon } from "./Icon";
 import { Badge, Button, IconButton } from "./ui";
 import { VerifyScheme } from "./VerifyScheme";
@@ -204,17 +202,6 @@ export function Detail() {
             </div>
           )}
         </div>
-      </div>
-
-      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--wt-muted)" }}>
-        スタック全体
-        <span className="font-normal normal-case" style={{ color: "var(--wt-muted)" }}>
-          （全 worktree で共通・現在の差し替え状態）
-        </span>
-      </div>
-      <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-        <ContainerList />
-        <FePanel />
       </div>
 
       {scheme && <VerifyScheme worktree={wt} plan={scheme} onClose={() => setScheme(null)} />}

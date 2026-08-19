@@ -43,6 +43,9 @@ export const sortModeAtom = atomWithStorage<SortMode>("wtctl.sortMode", "recent"
 });
 export const searchAtom = atom<string>("");
 export const loadingAtom = atom<boolean>(false);
+export const stackCollapsedAtom = atomWithStorage<boolean>("wtctl.stackCollapsed", false, undefined, {
+  getOnInit: true,
+});
 
 export type PrFilter = "all" | "open" | "merged" | "closed" | "none";
 export const prFilterAtom = atom<PrFilter>("all");
