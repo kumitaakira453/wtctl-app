@@ -190,8 +190,8 @@ pub async fn commit_files(path: String, sha: String) -> Result<Vec<crate::domain
 }
 
 #[tauri::command]
-pub async fn commit_diff(path: String, sha: String, file: String) -> Result<String, WtError> {
-    run_query(move |ctx| Ok(ctx.git.commit_diff(&path, &sha, &file))).await
+pub async fn commit_diff(path: String, sha: String, file: String, context: u32) -> Result<String, WtError> {
+    run_query(move |ctx| Ok(ctx.git.commit_diff(&path, &sha, &file, context))).await
 }
 
 /// `docker logs -f` を起動して行を Channel へストリームする（lazydocker 相当）。stream id を返す。

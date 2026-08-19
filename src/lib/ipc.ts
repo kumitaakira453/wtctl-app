@@ -35,8 +35,8 @@ export const api = {
   commitLog: (path: string) => invoke<CommitInfo[]>("commit_log", { path }),
   commitFiles: (path: string, sha: string) =>
     invoke<FileChange[]>("commit_files", { path, sha }),
-  commitDiff: (path: string, sha: string, file: string) =>
-    invoke<string>("commit_diff", { path, sha, file }),
+  commitDiff: (path: string, sha: string, file: string, context: number) =>
+    invoke<string>("commit_diff", { path, sha, file, context }),
 };
 
 /// アクション系コマンド。実行ログを onLog で逐次受け取り、完了時に resolve / 失敗で reject。

@@ -23,6 +23,13 @@ function basename(p: string): string {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+// diff の前後文脈行数（-U）。全体は十分大きな値でファイル全体を表示。
+const DIFF_CONTEXT_LEVELS = [
+  { label: "変更のみ", v: 3 },
+  { label: "広め", v: 25 },
+  { label: "全体", v: 100000 },
+] as const;
+
 /// 縦のドラッグハンドル。onResize には前回からの増分 dx を渡す。
 function Resizer({ onResize }: { onResize: (dx: number) => void }) {
   const last = useRef(0);
@@ -68,6 +75,13 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
   const [files, setFiles] = useState<FileChange[] | null>(null);
   const [file, setFile] = useState<string | null>(null);
   const [diff, setDiff] = useState<string | null>(null);
+  // diff の前後文脈行数（-U）。ファイルを変えたら「変更のみ」に戻す。
+  const [ctxLines, setCtxLines] = useState<number>(DIFF_CONTEXT_LEVELS[0].v);
+
+  const selectFile = (p: string) => {
+    setFile(p);
+    setCtxLines(DIFF_CONTEXT_LEVELS[0].v);
+  };
 
   useEffect(() => {
     let alive = true;
@@ -97,6 +111,7 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
       if (!alive) return;
       setFiles(fs);
       setFile(fs[0]?.path ?? null);
+      setCtxLines(DIFF_CONTEXT_LEVELS[0].v);
     });
     return () => {
       alive = false;
@@ -110,13 +125,13 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
     }
     let alive = true;
     setDiff(null);
-    api.commitDiff(path, sha, file).then((d) => {
+    api.commitDiff(path, sha, file, ctxLines).then((d) => {
       if (alive) setDiff(d);
     });
     return () => {
       alive = false;
     };
-  }, [path, sha, file]);
+  }, [path, sha, file, ctxLines]);
 
   if (commits === null) {
     return (
@@ -203,7 +218,7 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
                 変更ファイルなし
               </div>
             ) : (
-              <FileTree files={files} selected={file} onSelect={setFile} />
+              <FileTree files={files} selected={file} onSelect={selectFile} />
             )}
           </div>
 
@@ -211,7 +226,40 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
 
           {/* diff（残り全幅） */}
           <div className="flex min-w-0 flex-1 flex-col">
-            <ColHeader label={file ? basename(file) : "差分"} mono={!!file} />
+            <div
+              className="sticky top-0 z-10 flex items-center gap-2 px-3 py-1.5"
+              style={{ background: "var(--wt-bg)", borderBottom: "1px solid var(--wt-border)" }}
+            >
+              <span
+                className="min-w-0 flex-1 truncate font-mono text-[11px] font-semibold"
+                style={{ color: "var(--wt-muted)" }}
+              >
+                {file ? basename(file) : "差分"}
+              </span>
+              {file && (
+                <div className="flex shrink-0 items-center overflow-hidden rounded-md" style={{ border: "1px solid var(--wt-border)" }}>
+                  {DIFF_CONTEXT_LEVELS.map((lv, i) => {
+                    const on = ctxLines === lv.v;
+                    return (
+                      <button
+                        key={lv.v}
+                        type="button"
+                        onClick={() => setCtxLines(lv.v)}
+                        title={lv.v >= 100000 ? "ファイル全体を表示" : `前後 ${lv.v} 行の文脈を表示`}
+                        className="px-2 py-0.5 text-[10.5px] font-medium transition-colors"
+                        style={{
+                          background: on ? "var(--wt-accent-soft)" : "transparent",
+                          color: on ? "var(--wt-accent)" : "var(--wt-muted)",
+                          borderLeft: i === 0 ? "none" : "1px solid var(--wt-border)",
+                        }}
+                      >
+                        {lv.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <div className="min-h-0 flex-1">
               {diff === null ? (
                 <div className="flex h-full items-center justify-center">

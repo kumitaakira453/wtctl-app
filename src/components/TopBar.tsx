@@ -28,14 +28,14 @@ function UpdateCheck() {
   }
   if (status === "available") {
     return (
-      <Button size="sm" variant="primary" icon="upgrade" title="新しいバージョンがあります" onClick={check}>
+      <Button size="sm" variant="primary" icon="download" title="新しいバージョンがあります" onClick={check}>
         更新あり
       </Button>
     );
   }
   const tip = status === "uptodate" ? "最新です（クリックで再確認）" : status === "error" ? "確認に失敗（再試行）" : "最新リリースを確認";
   return (
-    <Button size="sm" variant="ghost" icon="upgrade" title={tip} onClick={check}>
+    <Button size="sm" variant="ghost" icon="download" title={tip} onClick={check}>
       更新確認
     </Button>
   );

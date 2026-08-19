@@ -1,4 +1,5 @@
 import { useAtom, useAtomValue } from "jotai";
+import logoUrl from "../assets/logo.png";
 import { beActiveFor, feActiveFor, PR_COLOR } from "../lib/status";
 import type { WorktreeEntry } from "../lib/types";
 import { useApp } from "../state/app";
@@ -44,7 +45,7 @@ export function Sidebar({ onNew, onSettings }: { onNew: () => void; onSettings: 
       style={{ width: 320, background: "var(--wt-sidebar)", borderRight: "1px solid var(--wt-border)" }}
     >
       <div data-tauri-drag-region className="wt-drag flex items-center gap-2 px-4 pb-2" style={{ paddingTop: 30 }}>
-        <Icon name="account_tree" size={20} style={{ color: "var(--wt-accent)" }} />
+        <img src={logoUrl} alt="wtctl" width={22} height={22} style={{ borderRadius: 6 }} />
         <span className="text-[15px] font-semibold tracking-tight">wtctl</span>
         <div className="ml-auto flex items-center gap-1">
           <IconButton icon="add" onClick={onNew} title="worktree を作成" size={20} />

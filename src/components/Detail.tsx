@@ -218,23 +218,30 @@ function PlanChips({ plan }: { plan: VerifyPlan | undefined }) {
   if (empty) {
     return <span className="text-[12px]" style={{ color: "var(--wt-muted)" }}>変更なし</span>;
   }
+  const migTip = plan.migrations.map((m) => `↑ ${m.group}/${m.app}: ${m.name}`).join("\n");
   return (
     <>
       {plan.groups.map((g) => (
-        <Badge key={g} color="var(--wt-warn)" soft>
-          BE {g}
-          {plan.buildGroups.includes(g) ? " +build" : ""}
-        </Badge>
+        <span key={g} style={{ cursor: "default" }}>
+          <Badge color="var(--wt-warn)" soft>
+            BE {g}
+            {plan.buildGroups.includes(g) ? " +build" : ""}
+          </Badge>
+        </span>
       ))}
       {plan.fe && (
-        <Badge color="var(--wt-info)" soft>
-          FE
-        </Badge>
+        <span style={{ cursor: "default" }}>
+          <Badge color="var(--wt-info)" soft>
+            FE
+          </Badge>
+        </span>
       )}
       {plan.migrations.length > 0 && (
-        <Badge color="var(--wt-ok)" soft>
-          migration ×{plan.migrations.length}
-        </Badge>
+        <span style={{ cursor: "default" }} title={`適用される migration（進める）\n${migTip}`}>
+          <Badge color="var(--wt-ok)" soft>
+            migration ×{plan.migrations.length}
+          </Badge>
+        </span>
       )}
     </>
   );

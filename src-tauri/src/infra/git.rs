@@ -410,10 +410,12 @@ impl Git {
 
     /// 指定ファイルの unified diff（コミットヘッダなし）。sha="WORKING" は作業ツリー差分。
     /// WORKING で追跡差分が空（=未追跡ファイル）のときは全追加として表示する。
-    pub fn commit_diff(&self, worktree: &str, sha: &str, path: &str) -> String {
+    /// context は前後の文脈行数（-U）。大きくすればファイル全体に近づく。
+    pub fn commit_diff(&self, worktree: &str, sha: &str, path: &str, context: u32) -> String {
+        let uarg = format!("-U{context}");
         if sha == "WORKING" {
             let tracked = capture(
-                &["git", "-c", "core.quotePath=false", "-C", worktree, "diff", "HEAD", "--", path],
+                &["git", "-c", "core.quotePath=false", "-C", worktree, "diff", &uarg, "HEAD", "--", path],
                 None,
                 false,
             )
@@ -424,7 +426,7 @@ impl Git {
             // 未追跡ファイル: /dev/null との差分で全追加表示にする（--no-index は差分ありで exit 1）
             return capture(
                 &[
-                    "git", "-c", "core.quotePath=false", "-C", worktree, "diff", "--no-index",
+                    "git", "-c", "core.quotePath=false", "-C", worktree, "diff", &uarg, "--no-index",
                     "--", "/dev/null", path,
                 ],
                 None,
@@ -435,7 +437,7 @@ impl Git {
         // 第1親との 2-way 差分（マージの combined diff を避ける）
         let parent = format!("{sha}^");
         capture(
-            &["git", "-c", "core.quotePath=false", "-C", worktree, "diff", "-M", &parent, sha, "--", path],
+            &["git", "-c", "core.quotePath=false", "-C", worktree, "diff", &uarg, "-M", &parent, sha, "--", path],
             None,
             false,
         )

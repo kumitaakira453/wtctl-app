@@ -23,6 +23,7 @@ function parse(diff: string): Row[] {
       rows.push({ kind: "hunk", text: line, oldNo: null, newNo: null });
       continue;
     }
+    // ファイルヘッダ（diff --git / index / --- / +++ / mode 等）はノイズなので表示しない
     if (
       line.startsWith("diff --git") ||
       line.startsWith("diff --cc") ||
@@ -34,18 +35,17 @@ function parse(diff: string): Row[] {
       line.startsWith("deleted file") ||
       line.startsWith("similarity ") ||
       line.startsWith("rename ") ||
+      line.startsWith("copy ") ||
       line.startsWith("old mode") ||
-      line.startsWith("new mode")
+      line.startsWith("new mode") ||
+      line.startsWith("\\") // "\ No newline at end of file"
     ) {
-      rows.push({ kind: "meta", text: line, oldNo: null, newNo: null });
       continue;
     }
     if (line.startsWith("+")) {
       rows.push({ kind: "add", text: line.slice(1), oldNo: null, newNo: newNo++ });
     } else if (line.startsWith("-")) {
       rows.push({ kind: "del", text: line.slice(1), oldNo: oldNo++, newNo: null });
-    } else if (line.startsWith("\\")) {
-      rows.push({ kind: "meta", text: line, oldNo: null, newNo: null });
     } else {
       rows.push({ kind: "ctx", text: line.replace(/^ /, ""), oldNo: oldNo++, newNo: newNo++ });
     }
@@ -83,10 +83,10 @@ export function DiffView({ diff, lang }: { diff: string; lang: string | null }) 
     [rows, lang],
   );
 
-  if (!diff.trim()) {
+  if (!diff.trim() || rows.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-[12px]" style={{ color: "var(--wt-muted)" }}>
-        差分はありません（バイナリ / 内容変更なし）
+        内容の変更はありません（リネーム / モード変更 / バイナリ）
       </div>
     );
   }
