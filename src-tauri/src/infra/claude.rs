@@ -172,6 +172,54 @@ fn extract_command(text: &str) -> Option<String> {
     Some(if args.is_empty() { name.to_string() } else { format!("{name} {args}") })
 }
 
+/// Edit/Write/MultiEdit の入力を (ファイル名, unified diff 風テキスト) に変換する。
+/// diff ヘッダ（---/+++/@@）は DiffView 側で解釈される。
+fn edit_diff(input: &Value, tool: &str) -> Option<(String, String)> {
+    let file = input.get("file_path").and_then(|v| v.as_str())?;
+    let base = file.rsplit('/').next().unwrap_or(file).to_string();
+    let mut out = format!("--- {file}\n+++ {file}\n");
+    let hunk = |old: &str, new: &str| -> String {
+        let mut s = String::from("@@ @@\n");
+        for l in old.split('\n') {
+            s.push('-');
+            s.push_str(l);
+            s.push('\n');
+        }
+        for l in new.split('\n') {
+            s.push('+');
+            s.push_str(l);
+            s.push('\n');
+        }
+        s
+    };
+    match tool {
+        "Write" => {
+            let content = input.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            out.push_str("@@ @@\n");
+            for l in content.split('\n') {
+                out.push('+');
+                out.push_str(l);
+                out.push('\n');
+            }
+        }
+        "MultiEdit" => {
+            let edits = input.get("edits").and_then(|v| v.as_array())?;
+            for e in edits {
+                let o = e.get("old_string").and_then(|v| v.as_str()).unwrap_or("");
+                let n = e.get("new_string").and_then(|v| v.as_str()).unwrap_or("");
+                out.push_str(&hunk(o, n));
+            }
+        }
+        "Edit" => {
+            let o = input.get("old_string").and_then(|v| v.as_str())?;
+            let n = input.get("new_string").and_then(|v| v.as_str()).unwrap_or("");
+            out.push_str(&hunk(o, n));
+        }
+        _ => return None,
+    }
+    Some((base, out))
+}
+
 fn between(s: &str, open: &str, close: &str) -> Option<String> {
     let i = s.find(open)? + open.len();
     let j = s[i..].find(close)? + i;
@@ -245,13 +293,22 @@ fn blocks_of(content: &Value) -> Vec<ClaudeBlock> {
                         push_user_text(&mut blocks, t);
                     }
                     "thinking" => {
+                        // 拡張思考は本文が保存されず空のことがある。空なら出さない。
                         let t = b.get("thinking").and_then(|v| v.as_str()).unwrap_or("");
-                        blocks.push(ClaudeBlock { kind: "thinking".into(), text: t.to_string(), name: None });
+                        if !t.trim().is_empty() {
+                            blocks.push(ClaudeBlock { kind: "thinking".into(), text: t.to_string(), name: None });
+                        }
                     }
                     "tool_use" => {
                         let name = b.get("name").and_then(|v| v.as_str()).unwrap_or("tool").to_string();
-                        let input = b.get("input").map(|v| serde_json::to_string_pretty(v).unwrap_or_default()).unwrap_or_default();
-                        blocks.push(ClaudeBlock { kind: "tool_use".into(), text: truncate(&input), name: Some(name) });
+                        let input = b.get("input");
+                        // Edit / Write / MultiEdit はファイル差分として見せる
+                        if let Some(edit) = input.and_then(|v| edit_diff(v, &name)) {
+                            blocks.push(ClaudeBlock { kind: "edit".into(), text: truncate(&edit.1), name: Some(edit.0) });
+                        } else {
+                            let text = input.map(|v| serde_json::to_string_pretty(v).unwrap_or_default()).unwrap_or_default();
+                            blocks.push(ClaudeBlock { kind: "tool_use".into(), text: truncate(&text), name: Some(name) });
+                        }
                     }
                     "tool_result" => {
                         let text = b.get("content").map(stringify).unwrap_or_default();

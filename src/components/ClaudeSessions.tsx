@@ -1,10 +1,49 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { langForPath } from "../lib/highlight";
 import { api } from "../lib/ipc";
 import { renderMarkdown } from "../lib/markdown";
 import type { ClaudeBlock, ClaudeMessage, ClaudeSession } from "../lib/types";
+import { ClaudeMark } from "./ClaudeMark";
+import { DiffView } from "./DiffView";
 import { Icon } from "./Icon";
 import { Spinner } from "./ui";
+
+const PREVIEW_LINES = 6;
+
+/// 数行のプレビューを出し、続きはアコーディオンで開く（Claude Desktop 風のツール表示）。
+function ToolBlock({ icon, label, body, color }: { icon: string; label: string; body: string; color: string }) {
+  const [open, setOpen] = useState(false);
+  const lines = body.length ? body.split("\n") : [];
+  const hasMore = lines.length > PREVIEW_LINES;
+  const shown = open || !hasMore ? body : lines.slice(0, PREVIEW_LINES).join("\n");
+  return (
+    <div className="my-1 min-w-0 rounded-md" style={{ border: "1px solid var(--wt-border)", background: "var(--wt-panel)" }}>
+      <div className="flex items-center gap-1.5 px-2 py-1 text-[11.5px] font-medium" style={{ color }}>
+        <Icon name={icon} size={13} />
+        {label}
+      </div>
+      {body.length > 0 && (
+        <pre
+          className="overflow-x-auto whitespace-pre-wrap break-all px-2.5 pb-1.5 font-mono text-[11px] leading-[1.5]"
+          style={{ color: "var(--wt-fg-dim)", maxHeight: open ? 320 : undefined, overflowY: open ? "auto" : "hidden" }}
+        >
+          {shown}
+        </pre>
+      )}
+      {hasMore && (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="px-2.5 pb-1.5 text-[11px]"
+          style={{ color: "var(--wt-info)" }}
+        >
+          {open ? "折りたたむ" : `全て表示（${lines.length} 行）`}
+        </button>
+      )}
+    </div>
+  );
+}
 
 function relTime(iso: string): string {
   if (!iso) return "";
@@ -64,14 +103,26 @@ function Block({ b }: { b: ClaudeBlock }) {
           {b.text}
         </div>
       );
+    case "edit":
+      return (
+        <div className="my-1 min-w-0 overflow-hidden rounded-md" style={{ border: "1px solid var(--wt-border)", background: "var(--wt-panel)" }}>
+          <div className="flex items-center gap-1.5 px-2 py-1 text-[11.5px] font-medium" style={{ color: "var(--wt-warn)" }}>
+            <Icon name="edit" size={13} />
+            {b.name ?? "edit"}
+          </div>
+          <div style={{ maxHeight: 340, overflow: "auto" }}>
+            <DiffView diff={b.text} lang={b.name ? langForPath(b.name) : null} />
+          </div>
+        </div>
+      );
     case "skill":
       return <Collapsible icon="extension" label={`スキル: ${b.name ?? ""}`} body={b.text} color="var(--wt-accent)" />;
     case "thinking":
-      return <Collapsible icon="neurology" label="思考" body={b.text} color="var(--wt-muted)" />;
+      return <ToolBlock icon="neurology" label="思考" body={b.text} color="var(--wt-muted)" />;
     case "tool_use":
-      return <Collapsible icon="build" label={b.name ?? "ツール"} body={b.text} color="var(--wt-info)" />;
+      return <ToolBlock icon="build" label={b.name ?? "ツール"} body={b.text} color="var(--wt-info)" />;
     case "tool_result":
-      return <Collapsible icon="subdirectory_arrow_right" label="結果" body={b.text} color="var(--wt-muted)" />;
+      return <ToolBlock icon="subdirectory_arrow_right" label="結果" body={b.text} color="var(--wt-muted)" />;
     case "image":
       return <div className="text-[12px]" style={{ color: "var(--wt-muted)" }}>［画像］</div>;
     default:
@@ -88,11 +139,12 @@ function MessageRow({ m }: { m: ClaudeMessage }) {
   return (
     <div className="min-w-0 px-4 py-2.5" style={{ borderBottom: "1px solid var(--wt-border)" }}>
       {header && (
-        <div className="mb-1 flex items-center gap-2">
+        <div className="mb-1 flex items-center gap-1.5">
+          {header === "Claude" && <ClaudeMark size={13} />}
           <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: headerColor }}>
             {header}
           </span>
-          <span className="text-[10px]" style={{ color: "var(--wt-muted)" }}>{relTime(m.timestamp)}</span>
+          <span className="ml-0.5 text-[10px]" style={{ color: "var(--wt-muted)" }}>{relTime(m.timestamp)}</span>
         </div>
       )}
       <div className="flex min-w-0 flex-col gap-1">
@@ -111,6 +163,14 @@ export function ClaudeSessions({ path }: { path: string }) {
   const [msgs, setMsgs] = useState<ClaudeMessage[] | null>(null);
   // 手動再読み込み用。ライブ追尾はしないので進行中セッションはこれで取り直す。
   const [nonce, setNonce] = useState(0);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  // セッション選択・再読み込み時は最新（最下部）を表示する
+  useEffect(() => {
+    if (!msgs) return;
+    const el = bodyRef.current;
+    if (el) requestAnimationFrame(() => (el.scrollTop = el.scrollHeight));
+  }, [msgs]);
 
   useEffect(() => {
     let alive = true;
@@ -213,7 +273,7 @@ export function ClaudeSessions({ path }: { path: string }) {
             </button>
           </div>
         )}
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+        <div ref={bodyRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           {msgs === null ? (
             <div className="flex h-full items-center justify-center">
               <Spinner size={16} />
