@@ -97,7 +97,24 @@ export interface ClaudeSession {
 }
 
 export interface ClaudeBlock {
-  kind: "text" | "thinking" | "tool_use" | "tool_result" | "image" | "command" | "interrupted" | "skill" | "edit";
+  kind:
+    | "text"
+    | "thinking"
+    | "tool_use"
+    | "tool_result"
+    | "image"
+    | "command"
+    | "interrupted"
+    | "skill"
+    | "edit"
+    | "bash"
+    | "read"
+    | "search"
+    | "web"
+    | "wait"
+    | "question"
+    | "todo"
+    | "task";
   text: string;
   name: string | null;
 }

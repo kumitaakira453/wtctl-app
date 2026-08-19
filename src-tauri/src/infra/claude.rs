@@ -220,6 +220,145 @@ fn edit_diff(input: &Value, tool: &str) -> Option<(String, String)> {
     Some((base, out))
 }
 
+/// tool_use の入力を、ツールごとに意味を抽出した表示用ブロックへ整形する。
+/// Edit 系と Skill は呼び出し側で別処理するため、ここには来ない。
+/// 未対応ツールは pretty-print した生 JSON にフォールバックする。
+fn format_tool(name: &str, input: Option<&Value>) -> ClaudeBlock {
+    let inp = input.cloned().unwrap_or(Value::Null);
+    let s = |k: &str| inp.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let block = |kind: &str, text: String, name: Option<String>| ClaudeBlock {
+        kind: kind.into(),
+        text: truncate(&text),
+        name,
+    };
+    match name {
+        "Bash" => {
+            let cmd = s("command");
+            let mut label = s("description");
+            if inp.get("run_in_background").and_then(|v| v.as_bool()).unwrap_or(false) {
+                label = if label.is_empty() { "バックグラウンド".into() } else { format!("{label}（バックグラウンド）") };
+            }
+            block("bash", cmd, if label.is_empty() { None } else { Some(label) })
+        }
+        "Read" => {
+            let mut t = s("file_path");
+            let pages = s("pages");
+            let off = inp.get("offset").and_then(|v| v.as_i64());
+            let lim = inp.get("limit").and_then(|v| v.as_i64());
+            if !pages.is_empty() {
+                t.push_str(&format!("  p.{pages}"));
+            } else if let Some(o) = off {
+                match lim {
+                    Some(l) => t.push_str(&format!("  L{o}–{}", o + l)),
+                    None => t.push_str(&format!("  L{o}–")),
+                }
+            }
+            block("read", t, None)
+        }
+        "Grep" => {
+            let mut t = s("pattern");
+            let glob = s("glob");
+            let path = s("path");
+            if !glob.is_empty() {
+                t.push_str(&format!("  ({glob})"));
+            }
+            if !path.is_empty() {
+                t.push_str(&format!("  in {path}"));
+            }
+            block("search", t, Some("grep".into()))
+        }
+        "Glob" => {
+            let mut t = s("pattern");
+            let path = s("path");
+            if !path.is_empty() {
+                t.push_str(&format!("  in {path}"));
+            }
+            block("search", t, Some("glob".into()))
+        }
+        "WebFetch" => {
+            let url = s("url");
+            let prompt = s("prompt");
+            let t = if prompt.is_empty() { url } else { format!("{url}\n{prompt}") };
+            block("web", t, Some("fetch".into()))
+        }
+        "WebSearch" => block("web", s("query"), Some("search".into())),
+        "ScheduleWakeup" => {
+            let t = if inp.get("stop").and_then(|v| v.as_bool()).unwrap_or(false) {
+                "ループを終了".to_string()
+            } else {
+                let reason = s("reason");
+                let when = match inp.get("delaySeconds").and_then(|v| v.as_f64()) {
+                    Some(d) if d >= 60.0 => format!("約{}分後", (d / 60.0).round() as i64),
+                    Some(d) => format!("{}秒後", d as i64),
+                    None => String::new(),
+                };
+                match (reason.is_empty(), when.is_empty()) {
+                    (false, false) => format!("{reason} · {when}"),
+                    (true, false) => when,
+                    (false, true) => reason,
+                    (true, true) => "再開を予約".into(),
+                }
+            };
+            block("wait", t, None)
+        }
+        "AskUserQuestion" => {
+            let mut t = String::new();
+            if let Some(qs) = inp.get("questions").and_then(|v| v.as_array()) {
+                for (i, q) in qs.iter().enumerate() {
+                    if i > 0 {
+                        t.push('\n');
+                    }
+                    t.push_str(q.get("question").and_then(|v| v.as_str()).unwrap_or(""));
+                    t.push('\n');
+                    if let Some(opts) = q.get("options").and_then(|v| v.as_array()) {
+                        for o in opts {
+                            let label = o.get("label").and_then(|v| v.as_str()).unwrap_or("");
+                            let desc = o.get("description").and_then(|v| v.as_str()).unwrap_or("");
+                            if desc.is_empty() {
+                                t.push_str(&format!("• {label}\n"));
+                            } else {
+                                t.push_str(&format!("• {label} — {desc}\n"));
+                            }
+                        }
+                    }
+                }
+            }
+            block("question", t.trim_end().to_string(), None)
+        }
+        "TodoWrite" => {
+            let mut t = String::new();
+            if let Some(items) = inp.get("todos").and_then(|v| v.as_array()) {
+                for it in items {
+                    let content = it.get("content").and_then(|v| v.as_str()).unwrap_or("");
+                    let mark = match it.get("status").and_then(|v| v.as_str()).unwrap_or("") {
+                        "completed" => "☑",
+                        "in_progress" => "◐",
+                        _ => "☐",
+                    };
+                    t.push_str(&format!("{mark} {content}\n"));
+                }
+            }
+            block("todo", t.trim_end().to_string(), None)
+        }
+        "Task" | "Agent" => {
+            let subagent = s("subagent_type");
+            let desc = s("description");
+            let prompt = s("prompt");
+            let mut t = String::new();
+            if !desc.is_empty() {
+                t.push_str(&desc);
+                t.push_str("\n\n");
+            }
+            t.push_str(&prompt);
+            block("task", t.trim().to_string(), if subagent.is_empty() { None } else { Some(subagent) })
+        }
+        _ => {
+            let text = input.map(|v| serde_json::to_string_pretty(v).unwrap_or_default()).unwrap_or_default();
+            block("tool_use", text, Some(name.to_string()))
+        }
+    }
+}
+
 fn between(s: &str, open: &str, close: &str) -> Option<String> {
     let i = s.find(open)? + open.len();
     let j = s[i..].find(close)? + i;
@@ -310,8 +449,7 @@ fn blocks_of(content: &Value) -> Vec<ClaudeBlock> {
                         } else if let Some(edit) = input.and_then(|v| edit_diff(v, &name)) {
                             blocks.push(ClaudeBlock { kind: "edit".into(), text: truncate(&edit.1), name: Some(edit.0) });
                         } else {
-                            let text = input.map(|v| serde_json::to_string_pretty(v).unwrap_or_default()).unwrap_or_default();
-                            blocks.push(ClaudeBlock { kind: "tool_use".into(), text: truncate(&text), name: Some(name) });
+                            blocks.push(format_tool(&name, input));
                         }
                     }
                     "tool_result" => {

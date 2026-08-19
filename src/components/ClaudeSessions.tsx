@@ -1,7 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { langForPath } from "../lib/highlight";
+import { highlightCode, langForPath } from "../lib/highlight";
 import { api } from "../lib/ipc";
 import { renderMarkdown } from "../lib/markdown";
 import type { ClaudeBlock, ClaudeMessage, ClaudeSession } from "../lib/types";
@@ -13,7 +13,20 @@ import { Spinner } from "./ui";
 const PREVIEW_LINES = 6;
 
 /// 数行のプレビューを出し、続きはアコーディオンで開く（Claude Desktop 風のツール表示）。
-function ToolBlock({ icon, label, body, color }: { icon: string; label: string; body: string; color: string }) {
+/// lang を渡すと本文を highlight.js でシンタックスハイライトする。
+function ToolBlock({
+  icon,
+  label,
+  body,
+  color,
+  lang,
+}: {
+  icon: string;
+  label: string;
+  body: string;
+  color: string;
+  lang?: string;
+}) {
   const [open, setOpen] = useState(false);
   const lines = body.length ? body.split("\n") : [];
   const hasMore = lines.length > PREVIEW_LINES;
@@ -26,11 +39,12 @@ function ToolBlock({ icon, label, body, color }: { icon: string; label: string; 
       </div>
       {body.length > 0 && (
         <pre
-          className="overflow-x-auto whitespace-pre-wrap break-all px-2.5 pb-1.5 font-mono text-[11px] leading-[1.5]"
+          className="hljs-diff overflow-x-auto whitespace-pre-wrap break-all px-2.5 pb-1.5 font-mono text-[11px] leading-[1.5]"
           style={{ color: "var(--wt-fg-dim)", maxHeight: open ? 320 : undefined, overflowY: open ? "auto" : "hidden" }}
-        >
-          {shown}
-        </pre>
+          {...(lang
+            ? { dangerouslySetInnerHTML: { __html: highlightCode(shown, lang) } }
+            : { children: shown })}
+        />
       )}
       {hasMore && (
         <button
@@ -46,9 +60,35 @@ function ToolBlock({ icon, label, body, color }: { icon: string; label: string; 
   );
 }
 
+/// 1 行で完結する軽量ツール（Read / Grep / Glob / Web / 予約）を Claude Desktop 風に
+/// コンパクト表示する。長い場合は 1 行目のみ・省略し、全文は title で見せる。
+function InlineTool({ icon, prefix, text, color }: { icon: string; prefix?: string; text: string; color: string }) {
+  const first = text.split("\n")[0];
+  return (
+    <div className="flex min-w-0 items-center gap-1.5 py-0.5 text-[11.5px]" title={text}>
+      <Icon name={icon} size={13} style={{ color, flexShrink: 0 }} />
+      {prefix && (
+        <span className="shrink-0 font-medium" style={{ color }}>
+          {prefix}
+        </span>
+      )}
+      <span className="truncate font-mono" style={{ color: "var(--wt-fg-dim)" }}>
+        {first}
+      </span>
+    </div>
+  );
+}
+
 function relTime(iso: string): string {
   if (!iso) return "";
   return iso.replace("T", " ").slice(0, 16);
+}
+
+/// MCP ツール名（mcp__server__Tool-name）は末尾のツール名だけを見せる。
+function prettyToolName(name: string | null): string {
+  if (!name) return "ツール";
+  const raw = name.startsWith("mcp__") ? name.split("__").pop() ?? name : name;
+  return raw.replace(/[-_]/g, " ");
 }
 
 /// markdown 内リンクのクリックは webview 遷移させず外部で開く。
@@ -120,8 +160,24 @@ function Block({ b }: { b: ClaudeBlock }) {
       return <Collapsible icon="extension" label={`スキル: ${b.name ?? ""}`} body={b.text} color="var(--wt-accent)" />;
     case "thinking":
       return <ToolBlock icon="neurology" label="思考" body={b.text} color="var(--wt-muted)" />;
+    case "bash":
+      return <ToolBlock icon="terminal" label={b.name ?? "コマンド"} body={b.text} color="var(--wt-accent)" lang="bash" />;
+    case "read":
+      return <InlineTool icon="description" prefix="読み取り" text={b.text} color="var(--wt-info)" />;
+    case "search":
+      return <InlineTool icon="search" prefix={b.name ?? "検索"} text={b.text} color="var(--wt-info)" />;
+    case "web":
+      return <InlineTool icon="public" prefix={b.name === "search" ? "Web 検索" : "Web 取得"} text={b.text} color="var(--wt-info)" />;
+    case "wait":
+      return <InlineTool icon="schedule" prefix="再開予約" text={b.text} color="var(--wt-muted)" />;
+    case "question":
+      return <ToolBlock icon="quiz" label="ユーザーへの質問" body={b.text} color="var(--wt-accent)" />;
+    case "todo":
+      return <ToolBlock icon="checklist" label="タスクリスト" body={b.text} color="var(--wt-info)" />;
+    case "task":
+      return <ToolBlock icon="smart_toy" label={b.name ? `エージェント: ${b.name}` : "サブタスク"} body={b.text} color="var(--wt-accent)" />;
     case "tool_use":
-      return <ToolBlock icon="build" label={b.name ?? "ツール"} body={b.text} color="var(--wt-info)" />;
+      return <ToolBlock icon="build" label={prettyToolName(b.name)} body={b.text} color="var(--wt-info)" />;
     case "tool_result":
       return <ToolBlock icon="subdirectory_arrow_right" label="結果" body={b.text} color="var(--wt-muted)" />;
     case "image":
