@@ -22,10 +22,24 @@ pub fn rollback_target(ctx: &Ctx, worktree: &str, appdir: &str, base: Option<&st
 
 /// 検出した全グループの migration を適用する（進める）。
 pub fn apply_all(ctx: &Ctx, groups: &[String], sink: &Sink) -> WtResult<()> {
+    ensure_stack(ctx, sink)?;
     for g in groups {
         ctx.docker.migrate(container(g)?, None, None, sink)?;
     }
     sink(LogEvent::success("migration を適用しました"));
+    Ok(())
+}
+
+/// スタックが停止していれば起動する（検証操作でいちいち止められないように）。
+pub fn ensure_stack(ctx: &Ctx, sink: &Sink) -> WtResult<()> {
+    if !ctx.docker.stack_up() {
+        sink(LogEvent::info("スタックが停止しているため起動します"));
+        ctx.docker.stack_start(sink)?;
+        if !ctx.docker.stack_up() {
+            return Err(WtError::new("スタックの起動に失敗しました"));
+        }
+        sink(LogEvent::success("スタックを起動しました"));
+    }
     Ok(())
 }
 

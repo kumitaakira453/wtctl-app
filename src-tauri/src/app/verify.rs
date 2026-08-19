@@ -22,9 +22,7 @@ pub fn verify(ctx: &Ctx, worktree: &str, plan: &VerifyPlan, sink: &Sink) -> WtRe
 }
 
 pub fn be(ctx: &Ctx, worktree: &str, groups: &[String], build_groups: &[String], sink: &Sink) -> WtResult<()> {
-    if !ctx.docker.stack_up() {
-        return Err(WtError::new("スタック未起動（先にスタックを起動してください）"));
-    }
+    crate::app::migration::ensure_stack(ctx, sink)?;
     for g in groups {
         let gspec = group(g).ok_or_else(|| WtError::new(format!("不明なグループ: {g}")))?;
         if !ctx.fs.is_dir(&format!("{worktree}/{}", gspec.src)) {
