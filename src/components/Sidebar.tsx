@@ -75,24 +75,25 @@ export function Sidebar({ onNew, onSettings }: { onNew: () => void; onSettings: 
       <div className="wt-no-drag flex flex-wrap gap-1 px-3 pb-2">
         {(
           [
-            ["all", "全て"],
-            ["open", "Open"],
-            ["merged", "Merged"],
-            ["closed", "Closed"],
-            ["none", "PR無"],
-          ] as [PrFilter, string][]
-        ).map(([k, label]) => {
+            ["all", "全て", "var(--wt-muted)"],
+            ["open", "Open", PR_COLOR.open],
+            ["merged", "Merged", PR_COLOR.merged],
+            ["closed", "Closed", PR_COLOR.closed],
+            ["none", "PR無", "var(--wt-muted)"],
+          ] as [PrFilter, string, string][]
+        ).map(([k, label, color]) => {
           const on = prFilter === k;
           return (
             <button
               type="button"
               key={k}
               onClick={() => setPrFilter(k)}
-              className="rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors"
+              className="rounded-md px-2 py-0.5 text-[11px] transition-colors"
               style={{
-                color: on ? "var(--wt-accent-fg)" : "var(--wt-muted)",
-                background: on ? "var(--wt-accent)" : "transparent",
-                border: `1px solid ${on ? "var(--wt-accent)" : "var(--wt-border)"}`,
+                color,
+                fontWeight: on ? 700 : 500,
+                background: on ? `color-mix(in srgb, ${color} 16%, transparent)` : "transparent",
+                border: `1px solid ${on ? color : "var(--wt-border)"}`,
               }}
             >
               {label}

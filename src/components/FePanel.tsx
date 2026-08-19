@@ -29,7 +29,7 @@ export function FePanel() {
   }
 
   return (
-    <Panel title="FE Vite（単一・:3000）">
+    <Panel title="FE dev server（:3000）">
       <div className="flex items-center gap-3 text-sm">
         <span className="font-mono font-semibold" style={{ color: "var(--wt-info)" }}>
           :{port}
@@ -41,6 +41,9 @@ export function FePanel() {
       </div>
       <div className="mt-1 font-mono text-[11px]" style={{ color: "var(--wt-muted)" }}>
         http://localhost:{port}/
+      </div>
+      <div className="mt-1 text-[10px]" style={{ color: "var(--wt-muted)" }}>
+        常に :{port} で単一起動（並行しない・起動時に既存を停止）
       </div>
     </Panel>
   );
