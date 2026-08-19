@@ -63,6 +63,27 @@ export function ansiToSegments(text: string): AnsiSeg[] {
   return segs;
 }
 
+// ANSI 色を持たないログ行（Django/uvicorn/celery は docker logs で無色）に、
+// レベルや HTTP ステータスから色を推定して付ける。default（無指定）は fg-dim 表示。
+export function logLineColor(line: string): string | undefined {
+  if (/\b(critical|fatal|error|traceback|exception|panic)\b/i.test(line)) return "var(--wt-err)";
+  // アクセスログの HTTP ステータス（例: "GET /x HTTP/1.1" 200 / HTTP/1.1" 500）
+  const http =
+    /"(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)[^"]*"\s+(\d{3})/.exec(line) ||
+    /HTTP\/\d(?:\.\d)?"?\s+(\d{3})\b/.exec(line);
+  if (http) {
+    const code = parseInt(http[1], 10);
+    if (code >= 500) return "var(--wt-err)";
+    if (code >= 400) return "var(--wt-warn)";
+    if (code >= 200) return "var(--wt-ok)";
+  }
+  if (/\b(warn|warning|deprecat)\b/i.test(line)) return "var(--wt-warn)";
+  if (/\b(healthy|started|ready|listening|watching for file changes|compiled|success|serving)\b/i.test(line))
+    return "var(--wt-ok)";
+  if (/\bdebug\b/i.test(line)) return "var(--wt-muted)";
+  return undefined;
+}
+
 export const TONE_COLOR: Record<Tone, string> = {
   cmd: "var(--wt-info)",
   out: "var(--wt-fg-dim)",

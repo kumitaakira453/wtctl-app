@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ansiToSegments } from "../lib/ansi";
+import { ansiToSegments, logLineColor, stripAnsi } from "../lib/ansi";
 import { api, startContainerLogs } from "../lib/ipc";
 import { KNOWN_SERVICES } from "../lib/topology";
 import { Modal } from "./ui";
@@ -58,8 +58,16 @@ export function LogsModal({ initial, onClose }: { initial: string; onClose: () =
     if (el) atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
   };
 
-  // ANSI 色を解釈してセグメント化（本物のターミナル同様に色付け）
-  const segments = useMemo(() => ansiToSegments(lines.join("\n")), [lines]);
+  // 行ごとに描画。ANSI 色があればそれを使い、無い行はレベル/HTTP ステータスで着色する。
+  const rendered = useMemo(
+    () =>
+      lines.map((line) =>
+        line.includes("[")
+          ? { ansi: ansiToSegments(line) }
+          : { color: logLineColor(line), text: stripAnsi(line) },
+      ),
+    [lines],
+  );
 
   return (
     <Modal title="コンテナ ログ" onClose={onClose} width={880}>
@@ -95,13 +103,21 @@ export function LogsModal({ initial, onClose }: { initial: string; onClose: () =
             接続中…（コンテナ未起動ならログはありません）
           </div>
         ) : (
-          <pre className="log-line" style={{ color: "var(--wt-fg-dim)" }}>
-            {segments.map((s, i) => (
-              <span key={i} style={{ color: s.color, fontWeight: s.bold ? 600 : undefined }}>
-                {s.text}
-              </span>
-            ))}
-          </pre>
+          rendered.map((r, i) =>
+            r.ansi ? (
+              <div key={i} className="log-line whitespace-pre-wrap" style={{ color: "var(--wt-fg-dim)" }}>
+                {r.ansi.map((s, j) => (
+                  <span key={j} style={{ color: s.color, fontWeight: s.bold ? 600 : undefined }}>
+                    {s.text}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div key={i} className="log-line whitespace-pre-wrap" style={{ color: r.color ?? "var(--wt-fg-dim)" }}>
+                {r.text || " "}
+              </div>
+            ),
+          )
         )}
       </div>
     </Modal>
