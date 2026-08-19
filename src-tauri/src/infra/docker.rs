@@ -82,13 +82,14 @@ impl Docker {
         .to_string()
     }
 
-    /// 複数サービスの /app mount source を 1 回の docker inspect でまとめて取得する。
-    pub fn app_mounts(&self, services: &[&str]) -> HashMap<String, String> {
+    /// 複数サービスの /app mount source と State.Status を 1 回の docker inspect でまとめて取得する。
+    /// 返り値: service -> (mount source, container status)。
+    pub fn inspect_services(&self, services: &[&str]) -> HashMap<String, (String, String)> {
         let mut by_container: HashMap<String, String> = HashMap::new();
         for s in services {
             by_container.insert(self.container(s), (*s).to_string());
         }
-        let fmt = format!("{{{{.Name}}}}\t{APP_MOUNT_FMT}");
+        let fmt = format!("{{{{.Name}}}}\t{APP_MOUNT_FMT}\t{{{{.State.Status}}}}");
         let mut args: Vec<String> = vec!["docker".into(), "inspect".into()];
         for c in by_container.keys() {
             args.push(c.clone());
@@ -97,13 +98,15 @@ impl Docker {
         args.push(fmt);
         let refs: Vec<&str> = args.iter().map(String::as_str).collect();
         let out = capture(&refs, None, false).unwrap_or_default();
-        let mut result: HashMap<String, String> = HashMap::new();
+        let mut result: HashMap<String, (String, String)> = HashMap::new();
         for line in out.lines() {
-            if let Some((name, src)) = line.split_once('\t') {
-                let key = name.trim_start_matches('/');
-                if let Some(svc) = by_container.get(key) {
-                    result.insert(svc.clone(), src.trim().to_string());
-                }
+            let parts: Vec<&str> = line.splitn(3, '\t').collect();
+            if parts.len() < 3 {
+                continue;
+            }
+            let key = parts[0].trim_start_matches('/');
+            if let Some(svc) = by_container.get(key) {
+                result.insert(svc.clone(), (parts[1].trim().to_string(), parts[2].trim().to_string()));
             }
         }
         result

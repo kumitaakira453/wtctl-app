@@ -11,11 +11,18 @@ function basename(p: string): string {
   return normalizePath(p).split("/").pop() ?? p;
 }
 
-const STATE_META: Record<MountState, { color: string; label: (m: ServiceMount) => string }> = {
+const MOUNT_META: Record<MountState, { color: string; label: (m: ServiceMount) => string } | null> = {
   main: { color: "var(--wt-ok)", label: () => "MAIN" },
   worktree: { color: "var(--wt-warn)", label: (m) => `WT:${basename(m.worktree ?? "")}` },
-  down: { color: "var(--wt-muted)", label: () => "停止" },
+  down: null,
 };
+
+// 実行状態（FE の 稼働中/応答なし/停止 と同等の health）。
+function health(m: ServiceMount): { color: string; label: string } {
+  if (m.containerState !== "running") return { color: "var(--wt-danger)", label: "停止" };
+  if (m.responding === false) return { color: "var(--wt-warn)", label: "応答なし" };
+  return { color: "var(--wt-ok)", label: "稼働中" };
+}
 
 export function ContainerList() {
   const mounts = useAtomValue(mountsAtom);
@@ -54,31 +61,43 @@ export function ContainerList() {
           {KNOWN_SERVICES.map((svc, i) => {
             const m = byService.get(svc);
             if (!m) return null;
-            const meta = STATE_META[m.state];
+            const mount = MOUNT_META[m.state];
+            const h = health(m);
             const port = SERVICE_PORT[svc];
             const mine = m.state === "worktree" && selected != null && samePath(m.worktree, selected);
             return (
               <div
                 key={svc}
-                className="group flex items-center gap-3 px-4 py-2"
+                className="group flex items-center gap-2.5 px-4 py-2"
                 style={{
                   borderTop: i === 0 ? "none" : "1px solid var(--wt-border)",
                   background: mine ? "var(--wt-accent-soft)" : "transparent",
                 }}
               >
-                <span className="inline-block shrink-0 rounded-full" style={{ width: 8, height: 8, background: meta.color }} />
+                <span
+                  className="inline-block shrink-0 rounded-full"
+                  style={{ width: 8, height: 8, background: h.color }}
+                  title={h.label}
+                />
                 <span className="min-w-0 flex-1 truncate font-mono text-[12.5px]" style={{ color: "var(--wt-fg)" }}>
                   {svc}
                 </span>
-                <span className="shrink-0 font-mono text-[11px]" style={{ color: "var(--wt-muted)", width: 42, textAlign: "right" }}>
+                <span className="shrink-0 font-mono text-[11px]" style={{ color: "var(--wt-muted)", width: 40, textAlign: "right" }}>
                   {port ? `:${port}` : "—"}
                 </span>
-                <span
-                  className="shrink-0 rounded-md px-2 py-0.5 font-mono text-[11px] font-semibold"
-                  style={{ color: meta.color, border: `1px solid ${meta.color}`, minWidth: 88, textAlign: "center" }}
-                >
-                  {meta.label(m)}
+                <span className="shrink-0 text-[11px]" style={{ color: h.color, width: 54, textAlign: "right" }}>
+                  {h.label}
                 </span>
+                {mount ? (
+                  <span
+                    className="shrink-0 rounded-md px-2 py-0.5 font-mono text-[10.5px] font-semibold"
+                    style={{ color: mount.color, border: `1px solid ${mount.color}`, minWidth: 78, textAlign: "center" }}
+                  >
+                    {mount.label(m)}
+                  </span>
+                ) : (
+                  <span className="shrink-0" style={{ minWidth: 78 }} />
+                )}
                 <button
                   type="button"
                   onClick={() => setLogService(svc)}

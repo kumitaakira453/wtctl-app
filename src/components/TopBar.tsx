@@ -15,28 +15,27 @@ import { Button, IconButton, Spinner } from "./ui";
 function UpdateCheck() {
   const status = useAtomValue(updateStatusAtom);
   const setNonce = useSetAtom(updateCheckNonceAtom);
+  const check = () => setNonce((n) => n + 1);
+
   if (status === "checking") {
     return (
-      <span className="flex h-[34px] w-[34px] items-center justify-center" title="更新を確認中">
-        <Spinner size={15} />
+      <span className="flex items-center gap-1.5 px-2 text-[12px]" style={{ color: "var(--wt-muted)" }}>
+        <Spinner size={13} /> 確認中
       </span>
     );
   }
-  const tip =
-    status === "available"
-      ? "更新があります"
-      : status === "uptodate"
-        ? "最新です（クリックで再確認）"
-        : status === "error"
-          ? "確認に失敗（クリックで再試行）"
-          : "更新を確認";
+  if (status === "available") {
+    return (
+      <Button size="sm" variant="primary" icon="upgrade" title="新しいバージョンがあります" onClick={check}>
+        更新あり
+      </Button>
+    );
+  }
+  const tip = status === "uptodate" ? "最新です（クリックで再確認）" : status === "error" ? "確認に失敗（再試行）" : "最新リリースを確認";
   return (
-    <IconButton
-      icon="system_update_alt"
-      title={tip}
-      active={status === "available"}
-      onClick={() => setNonce((n) => n + 1)}
-    />
+    <Button size="sm" variant="ghost" icon="upgrade" title={tip} onClick={check}>
+      更新確認
+    </Button>
   );
 }
 
@@ -58,7 +57,7 @@ export function TopBar() {
       style={{ height: 52, borderBottom: "1px solid var(--wt-border)", background: "var(--wt-bg)" }}
     >
       {/* スタック状態 */}
-      <div className="wt-no-drag flex items-center gap-2 rounded-lg py-1 pl-2.5 pr-1" style={{ background: "var(--wt-panel)" }}>
+      <div className="wt-no-drag flex h-[34px] items-center gap-2 rounded-lg pl-2.5 pr-1" style={{ background: "var(--wt-panel)" }}>
         <span className="inline-block rounded-full" style={{ width: 8, height: 8, background: stackUp ? "var(--wt-ok)" : "var(--wt-danger)" }} />
         <span className="text-xs font-medium">{stackUp ? "スタック稼働" : "スタック停止"}</span>
         {stackUp ? (
@@ -89,7 +88,10 @@ export function TopBar() {
       </div>
 
       {/* :3000 FE */}
-      <div className="wt-no-drag flex items-center gap-2 rounded-lg py-1 pl-2.5 pr-1" style={{ background: "var(--wt-panel)" }}>
+      <div
+        className={`wt-no-drag flex h-[34px] items-center gap-2 rounded-lg pl-2.5 ${mainFe.listening ? "pr-1" : "pr-3"}`}
+        style={{ background: "var(--wt-panel)" }}
+      >
         <span className="text-xs font-medium" style={{ color: "var(--wt-info)" }}>:{port}</span>
         <span className="text-xs" style={{ color: feColor }}>{feLabel}</span>
         {mainFe.listening && (
@@ -135,8 +137,8 @@ export function TopBar() {
         >
           全戻す
         </Button>
-        <IconButton icon="health_and_safety" title="health（自動復旧）" onClick={() => run("health", "health_check", {})} />
-        <IconButton icon="refresh" title="更新" onClick={() => void refresh()} />
+        <IconButton icon="health_and_safety" title="health（停止/差し替え崩れを自動復旧）" onClick={() => run("health", "health_check", {})} />
+        <IconButton icon="refresh" title="再読み込み" onClick={() => void refresh()} />
         <UpdateCheck />
         <IconButton
           icon={theme === "dark" ? "light_mode" : "dark_mode"}

@@ -10,7 +10,7 @@ use crate::app::core::mount_snapshot;
 use crate::app::ctx::Ctx;
 use crate::domain::models::{BranchInfo, PrInfo, ServiceMount, VerifyPlan, ViteProcess, Worktree, WorktreeMeta};
 use crate::domain::plan::build_plan;
-use crate::domain::topology::MAIN_FE_PORT;
+use crate::domain::topology::{service, MAIN_FE_PORT};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -101,7 +101,16 @@ pub fn main_fe(ctx: &Ctx) -> MainFe {
 
 pub fn live(ctx: &Ctx) -> LiveResult {
     let stack_up = ctx.docker.stack_up();
-    let mounts = if stack_up { mount_snapshot(ctx) } else { vec![] };
+    let mut mounts = if stack_up { mount_snapshot(ctx) } else { vec![] };
+    // ポートを持つ稼働中サービスは HTTP 応答も確認して FE と同等の health を出す。
+    // 停止中はプローブしない（接続失敗待ちを避ける）。
+    for m in mounts.iter_mut() {
+        if m.container_state == "running" {
+            if let Some(port) = service(&m.service).and_then(|s| s.port) {
+                m.responding = Some(ctx.http.probe(&format!("http://localhost:{port}/")).is_some());
+            }
+        }
+    }
     LiveResult {
         mounts,
         vites: vites(ctx),

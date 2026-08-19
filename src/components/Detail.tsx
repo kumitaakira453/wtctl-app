@@ -45,6 +45,7 @@ export function Detail() {
   const plan = entry?.plan;
   const meta = entry?.meta;
   const pr = wt.branch ? prs[wt.branch] : undefined;
+  const hasMenu = !wt.isMain || (plan?.migrations.length ?? 0) > 0;
 
   const openScheme = async () => setScheme(plan ?? (await api.planFor(path)));
 
@@ -128,8 +129,14 @@ export function Detail() {
           {planSummary()}
         </span>
         <div className="relative ml-auto" ref={menuRef}>
-          <IconButton icon="more_horiz" title="その他" onClick={() => setMenu((v) => !v)} active={menu} />
-          {menu && (
+          <IconButton
+            icon="more_horiz"
+            title={hasMenu ? "その他" : "操作はありません"}
+            disabled={!hasMenu}
+            onClick={() => setMenu((v) => !v)}
+            active={menu}
+          />
+          {menu && hasMenu && (
             <div
               className="wt-fade absolute right-0 z-20 mt-1 w-60 overflow-hidden rounded-xl py-1"
               style={{ background: "var(--wt-bg)", border: "1px solid var(--wt-border-strong)", boxShadow: "var(--wt-shadow)" }}
@@ -146,11 +153,6 @@ export function Detail() {
                     onClick={() => removeAction("teardown_worktree", "撤去")}
                   />
                 </>
-              )}
-              {wt.isMain && plan?.migrations.length === 0 && (
-                <div className="px-3 py-2 text-[12px]" style={{ color: "var(--wt-muted)" }}>
-                  操作はありません
-                </div>
               )}
             </div>
           )}

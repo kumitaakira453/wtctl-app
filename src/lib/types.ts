@@ -54,6 +54,8 @@ export interface ServiceMount {
   source: string;
   state: MountState;
   worktree: string | null;
+  containerState: string; // "running" | "exited" | "missing" ...
+  responding: boolean | null; // ポート持ちのみ。celery 等は null
 }
 
 export interface Migration {

@@ -9,29 +9,19 @@ use crate::event::{LogEvent, Sink};
 pub fn mount_snapshot(ctx: &Ctx) -> Vec<ServiceMount> {
     let main = ctx.git.main_path().unwrap_or_else(|_| ctx.repo.clone());
     let known = known_services();
-    let sources = ctx.docker.app_mounts(&known);
+    let info = ctx.docker.inspect_services(&known);
     let mut out = Vec::new();
     for svc in &known {
         let sspec = match service(svc) {
             Some(s) => s,
             None => continue,
         };
-        let src = sources.get(*svc).cloned().unwrap_or_default();
+        let (src, status) = info.get(*svc).cloned().unwrap_or_default();
         let main_src = format!("{}/{}", main, sspec.src);
-        let mount = if src.is_empty() {
-            ServiceMount {
-                service: svc.to_string(),
-                source: String::new(),
-                state: MountState::Down,
-                worktree: None,
-            }
+        let (state, worktree) = if src.is_empty() {
+            (MountState::Down, None)
         } else if src == main_src {
-            ServiceMount {
-                service: svc.to_string(),
-                source: src.clone(),
-                state: MountState::Main,
-                worktree: Some(main.clone()),
-            }
+            (MountState::Main, Some(main.clone()))
         } else {
             let suffix = format!("/{}", sspec.src);
             let root = if src.ends_with(&suffix) {
@@ -39,14 +29,16 @@ pub fn mount_snapshot(ctx: &Ctx) -> Vec<ServiceMount> {
             } else {
                 src.clone()
             };
-            ServiceMount {
-                service: svc.to_string(),
-                source: src.clone(),
-                state: MountState::Worktree,
-                worktree: Some(root),
-            }
+            (MountState::Worktree, Some(root))
         };
-        out.push(mount);
+        out.push(ServiceMount {
+            service: svc.to_string(),
+            source: src,
+            state,
+            worktree,
+            container_state: if status.is_empty() { "missing".to_string() } else { status },
+            responding: None,
+        });
     }
     out
 }

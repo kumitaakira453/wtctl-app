@@ -63,6 +63,10 @@ pub struct ServiceMount {
     pub source: String,
     pub state: MountState,
     pub worktree: Option<String>,
+    /// docker の State.Status（"running" / "exited" / "missing" など）。
+    pub container_state: String,
+    /// ポートを持つサービスの HTTP 応答有無（celery 等は None）。
+    pub responding: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]

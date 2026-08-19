@@ -58,6 +58,8 @@ export const visibleWorktreesAtom = atom((get) => {
       )
     : list;
   filtered.sort((a, b) => {
+    // (main) は並び順に関わらず常に先頭固定
+    if (a.isMain !== b.isMain) return a.isMain ? -1 : 1;
     if (sort === "name") return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
     const ta = metas[a.path]?.meta.commitTs ?? 0;
     const tb = metas[b.path]?.meta.commitTs ?? 0;
