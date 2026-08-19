@@ -1,7 +1,9 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   BranchInfo,
+  CommitInfo,
   ConfigDto,
+  FileChange,
   ListResult,
   LiveResult,
   LogEvent,
@@ -30,6 +32,11 @@ export const api = {
   stopContainerLogs: (id: number) => invoke<void>("stop_container_logs", { id }),
   rollbackTarget: (worktree: string, appdir: string, base: string | null) =>
     invoke<string>("rollback_target", { worktree, appdir, base }),
+  commitLog: (path: string) => invoke<CommitInfo[]>("commit_log", { path }),
+  commitFiles: (path: string, sha: string) =>
+    invoke<FileChange[]>("commit_files", { path, sha }),
+  commitDiff: (path: string, sha: string, file: string) =>
+    invoke<string>("commit_diff", { path, sha, file }),
 };
 
 /// アクション系コマンド。実行ログを onLog で逐次受け取り、完了時に resolve / 失敗で reject。

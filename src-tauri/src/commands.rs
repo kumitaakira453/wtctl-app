@@ -179,6 +179,21 @@ pub async fn migration_show(group: String, app: String) -> Result<String, WtErro
     run_query(move |ctx| migration::show(ctx, &group, &app)).await
 }
 
+#[tauri::command]
+pub async fn commit_log(path: String) -> Result<Vec<crate::domain::models::CommitInfo>, WtError> {
+    run_query(move |ctx| Ok(ctx.git.commit_log(&path))).await
+}
+
+#[tauri::command]
+pub async fn commit_files(path: String, sha: String) -> Result<Vec<crate::domain::models::FileChange>, WtError> {
+    run_query(move |ctx| Ok(ctx.git.commit_files(&path, &sha))).await
+}
+
+#[tauri::command]
+pub async fn commit_diff(path: String, sha: String, file: String) -> Result<String, WtError> {
+    run_query(move |ctx| Ok(ctx.git.commit_diff(&path, &sha, &file))).await
+}
+
 /// `docker logs -f` を起動して行を Channel へストリームする（lazydocker 相当）。stream id を返す。
 #[tauri::command]
 pub fn start_container_logs(service: String, tail: u32, channel: Channel<LogEvent>) -> Result<u64, WtError> {

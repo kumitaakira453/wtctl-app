@@ -1,6 +1,6 @@
 //! git CLI アダプタ。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::domain::models::Worktree;
 use crate::error::WtResult;
@@ -267,6 +267,116 @@ impl Git {
     pub fn checkout(&self, main: &str, branch: &str, sink: &Sink) -> WtResult<()> {
         stream(&["git", "-C", main, "checkout", branch], None, true, sink)
     }
+
+    /// base..HEAD のコミット一覧（新しい順）。base 未検出時は直近 30 件。
+    pub fn commit_log(&self, worktree: &str) -> Vec<crate::domain::models::CommitInfo> {
+        let fmt = format!("--format=%H{S}%h{S}%s{S}%an{S}%cr", S = MIGRATION_SEP);
+        let range = self.merge_base(worktree).map(|b| format!("{b}..HEAD"));
+        let mut args: Vec<&str> = vec!["git", "-C", worktree, "log", &fmt];
+        match &range {
+            Some(r) => args.push(r),
+            None => args.push("-30"),
+        }
+        let out = capture(&args, None, false).unwrap_or_default();
+        out.lines()
+            .filter_map(|line| {
+                let p: Vec<&str> = line.split(MIGRATION_SEP).collect();
+                if p.len() < 5 {
+                    return None;
+                }
+                Some(crate::domain::models::CommitInfo {
+                    sha: p[0].to_string(),
+                    short_sha: p[1].to_string(),
+                    subject: p[2].to_string(),
+                    author: p[3].to_string(),
+                    rel: p[4].to_string(),
+                })
+            })
+            .collect()
+    }
+
+    /// 1 コミット（または未コミット="WORKING"）で変わったファイル一覧。
+    pub fn commit_files(&self, worktree: &str, sha: &str) -> Vec<crate::domain::models::FileChange> {
+        let working = sha == "WORKING";
+        let status_args: Vec<&str> = if working {
+            vec!["git", "-C", worktree, "status", "--porcelain"]
+        } else {
+            vec!["git", "-C", worktree, "show", "--format=", "--name-status", "-M", sha]
+        };
+        let numstat_args: Vec<&str> = if working {
+            vec!["git", "-C", worktree, "diff", "HEAD", "--numstat"]
+        } else {
+            vec!["git", "-C", worktree, "show", "--format=", "--numstat", "-M", sha]
+        };
+        // numstat: <add>\t<del>\t<path>（rename は path が `{old => new}` 記法）
+        let mut nums: HashMap<String, (i64, i64)> = HashMap::new();
+        for line in capture(&numstat_args, None, false).unwrap_or_default().lines() {
+            let cols: Vec<&str> = line.splitn(3, '\t').collect();
+            if cols.len() < 3 {
+                continue;
+            }
+            let add = cols[0].parse::<i64>().unwrap_or(-1);
+            let del = cols[1].parse::<i64>().unwrap_or(-1);
+            nums.insert(normalize_rename_path(cols[2]), (add, del));
+        }
+        let mut files: Vec<crate::domain::models::FileChange> = Vec::new();
+        for line in capture(&status_args, None, false).unwrap_or_default().lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let (status, path) = if working {
+                // porcelain: "XY path"
+                let code = line.get(..2).unwrap_or("").trim();
+                let raw = line.get(3..).unwrap_or("").trim();
+                let path = raw.split(" -> ").last().unwrap_or(raw).to_string();
+                let st = code.chars().next().filter(|c| *c != ' ').unwrap_or('M').to_string();
+                (st, path)
+            } else {
+                let cols: Vec<&str> = line.splitn(2, '\t').collect();
+                if cols.len() < 2 {
+                    continue;
+                }
+                let st = cols[0].chars().next().unwrap_or('M').to_string();
+                let path = cols[1].split('\t').last().unwrap_or(cols[1]).to_string();
+                (st, path)
+            };
+            let (add, del) = nums.get(&path).copied().unwrap_or((0, 0));
+            files.push(crate::domain::models::FileChange {
+                status,
+                path,
+                additions: add,
+                deletions: del,
+            });
+        }
+        files.sort_by(|a, b| a.path.cmp(&b.path));
+        files
+    }
+
+    /// 指定ファイルの unified diff（コミットヘッダなし）。sha="WORKING" は作業ツリー差分。
+    pub fn commit_diff(&self, worktree: &str, sha: &str, path: &str) -> String {
+        let args: Vec<&str> = if sha == "WORKING" {
+            vec!["git", "-C", worktree, "diff", "HEAD", "--", path]
+        } else {
+            vec!["git", "-C", worktree, "show", "--format=", "-M", sha, "--", path]
+        };
+        capture(&args, None, false).unwrap_or_default()
+    }
+}
+
+/// numstat の rename 記法 `dir/{old => new}/file` を新パスに正規化する。
+fn normalize_rename_path(raw: &str) -> String {
+    if let Some(open) = raw.find('{') {
+        if let Some(close) = raw[open..].find('}') {
+            let close = open + close;
+            let inner = &raw[open + 1..close];
+            let new = inner.split("=>").nth(1).unwrap_or(inner).trim();
+            return format!("{}{}{}", &raw[..open], new, &raw[close + 1..]).replace("//", "/");
+        }
+    }
+    if let Some((_, rhs)) = raw.split_once(" => ") {
+        return rhs.trim().to_string();
+    }
+    raw.trim().to_string()
 }
 
 fn is_migration_file(name: &str) -> bool {

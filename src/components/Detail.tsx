@@ -16,8 +16,9 @@ import {
   vitesAtom,
   worktreesAtom,
 } from "../state/atoms";
+import { CommitBrowser } from "./CommitBrowser";
 import { Icon } from "./Icon";
-import { Badge, Button, IconButton } from "./ui";
+import { Badge, Button } from "./ui";
 import { VerifyScheme } from "./VerifyScheme";
 
 export function Detail() {
@@ -109,9 +110,9 @@ export function Detail() {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-5">
-      {/* ヘッダ */}
-      <div className="mb-5">
+    <div className="flex h-full min-h-0 flex-col">
+      {/* ヘッダ + 操作（固定・非スクロール） */}
+      <div className="shrink-0 px-5 pb-4 pt-5">
         <div className="flex items-center gap-2">
           {wt.created && <Icon name="add_circle" size={16} style={{ color: "var(--wt-accent)" }} />}
           <span className="text-xl font-semibold tracking-tight">{wt.isMain ? "(main)" : wt.name}</span>
@@ -165,8 +166,8 @@ export function Detail() {
         </div>
       </div>
 
-      {/* アクション: 検証（スキーム）が主。ライフサイクルは ⋯ メニュー。 */}
-      <div className="mb-5 flex items-center gap-2">
+      {/* アクション: 検証（スキーム）が主。ライフサイクルは「操作」メニュー。 */}
+      <div className="flex shrink-0 items-center gap-2 px-5 pb-4">
         <Button variant="primary" icon="play_arrow" onClick={openScheme}>
           検証
         </Button>
@@ -174,13 +175,24 @@ export function Detail() {
           {planSummary()}
         </span>
         <div className="relative ml-auto" ref={menuRef}>
-          <IconButton
-            icon="more_horiz"
-            title={hasMenu ? "その他" : "操作はありません"}
+          <button
+            type="button"
             disabled={!hasMenu}
             onClick={() => setMenu((v) => !v)}
-            active={menu}
-          />
+            title={hasMenu ? "その他の操作" : "操作はありません"}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-medium transition-colors"
+            style={{
+              border: `1px solid ${menu ? "var(--wt-accent)" : "var(--wt-border-strong)"}`,
+              background: menu ? "var(--wt-accent-soft)" : "var(--wt-panel)",
+              color: hasMenu ? "var(--wt-fg-dim)" : "var(--wt-muted)",
+              opacity: hasMenu ? 1 : 0.5,
+              cursor: hasMenu ? "pointer" : "default",
+            }}
+          >
+            <Icon name="more_horiz" size={16} />
+            操作
+            <Icon name="expand_more" size={14} style={{ opacity: 0.6 }} />
+          </button>
           {menu && hasMenu && (
             <div
               className="wt-fade absolute right-0 z-20 mt-1 w-60 overflow-hidden rounded-xl py-1"
@@ -202,6 +214,11 @@ export function Detail() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* 差分ビューア（GitHub 風: コミット → ファイル → diff）で残り領域を埋める */}
+      <div className="min-h-0 flex-1">
+        <CommitBrowser path={path} dirty={!!meta?.dirty} />
       </div>
 
       {scheme && <VerifyScheme worktree={wt} plan={scheme} onClose={() => setScheme(null)} />}

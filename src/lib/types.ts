@@ -77,6 +77,21 @@ export interface VerifyPlan {
   isEmpty: boolean;
 }
 
+export interface CommitInfo {
+  sha: string;
+  shortSha: string;
+  subject: string;
+  author: string;
+  rel: string;
+}
+
+export interface FileChange {
+  status: string; // "A" | "M" | "D" | "R" | "C" | "?"
+  path: string;
+  additions: number;
+  deletions: number;
+}
+
 export interface ViteProcess {
   port: number;
   pid: number;

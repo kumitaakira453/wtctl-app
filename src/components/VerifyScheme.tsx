@@ -64,6 +64,45 @@ function Row({
   );
 }
 
+/// migration を group/app ごとにまとめたツリー表示。各 app の適用件数も示す。
+function MigrationTree({ migrations }: { migrations: { group: string; app: string; name: string; label: string }[] }) {
+  // 表示順を保ったまま group/app でまとめる
+  const tree: { key: string; group: string; app: string; names: string[] }[] = [];
+  for (const m of migrations) {
+    const key = `${m.group}/${m.app}`;
+    let node = tree.find((t) => t.key === key);
+    if (!node) {
+      node = { key, group: m.group, app: m.app, names: [] };
+      tree.push(node);
+    }
+    node.names.push(m.name);
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      {tree.map((node) => (
+        <div key={node.key}>
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <Icon name="folder" size={12} style={{ color: "var(--wt-muted)" }} />
+            <span className="font-mono" style={{ color: "var(--wt-fg-dim)" }}>
+              {node.group}/{node.app}
+            </span>
+            <span style={{ color: "var(--wt-muted)" }}>({node.names.length})</span>
+          </div>
+          <div className="ml-2 flex flex-col gap-0.5 pl-2" style={{ borderLeft: "1px solid var(--wt-border)" }}>
+            {node.names.map((name, i) => (
+              <div key={name} className="flex items-center gap-1.5 font-mono text-[11px]">
+                <span style={{ color: "var(--wt-muted)", opacity: 0.6 }}>{i + 1}.</span>
+                <Icon name="arrow_upward" size={11} style={{ color: "var(--wt-ok)" }} />
+                <span className="truncate" style={{ color: "var(--wt-fg-dim)" }}>{name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /// 検証スキーム: BE グループ / FE / migration をトグルして一括実行する。
 export function VerifyScheme({
   worktree,
@@ -169,18 +208,13 @@ export function VerifyScheme({
           >
             {migration && plan.migrations.length > 0 && (
               <div className="px-3 pb-2" style={{ borderTop: "1px solid var(--wt-border)" }}>
-                <div className="mt-2 mb-1 text-[10px]" style={{ color: "var(--wt-muted)" }}>
-                  適用される migration（進める）
+                <div className="mt-2 mb-1.5 flex items-center gap-1.5 text-[11px]">
+                  <Icon name="arrow_upward" size={13} style={{ color: "var(--wt-ok)" }} />
+                  <span style={{ color: "var(--wt-fg-dim)" }}>
+                    <b>{plan.migrations.length}</b> 件を適用（進める）
+                  </span>
                 </div>
-                <div className="flex flex-col gap-0.5">
-                  {plan.migrations.map((m) => (
-                    <div key={m.label} className="flex items-center gap-2 font-mono text-[11px]">
-                      <Icon name="arrow_upward" size={12} style={{ color: "var(--wt-ok)" }} />
-                      <span style={{ color: "var(--wt-muted)" }}>{m.group}/{m.app}:</span>
-                      <span style={{ color: "var(--wt-fg-dim)" }}>{m.name}</span>
-                    </div>
-                  ))}
-                </div>
+                <MigrationTree migrations={plan.migrations} />
               </div>
             )}
           </Row>
