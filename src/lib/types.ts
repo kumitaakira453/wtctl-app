@@ -86,6 +86,28 @@ export interface CommitInfo {
   body: string;
 }
 
+export interface ClaudeSession {
+  id: string;
+  title: string;
+  started: string;
+  lastActive: string;
+  userCount: number;
+  assistantCount: number;
+  branch: string;
+}
+
+export interface ClaudeBlock {
+  kind: "text" | "thinking" | "tool_use" | "tool_result" | "image";
+  text: string;
+  name: string | null;
+}
+
+export interface ClaudeMessage {
+  role: "user" | "assistant";
+  timestamp: string;
+  blocks: ClaudeBlock[];
+}
+
 export interface FileChange {
   status: string; // "A" | "M" | "D" | "R" | "C" | "?"
   path: string;

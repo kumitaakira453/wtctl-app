@@ -126,6 +126,36 @@ pub struct CommitInfo {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ClaudeSession {
+    pub id: String,
+    pub title: String,
+    pub started: String,
+    pub last_active: String,
+    pub user_count: i64,
+    pub assistant_count: i64,
+    pub branch: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeBlock {
+    /// "text" | "thinking" | "tool_use" | "tool_result" | "image"
+    pub kind: String,
+    pub text: String,
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeMessage {
+    /// "user" | "assistant"
+    pub role: String,
+    pub timestamp: String,
+    pub blocks: Vec<ClaudeBlock>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FileChange {
     /// "A" | "M" | "D" | "R" | "C" | "?" など。
     pub status: String,

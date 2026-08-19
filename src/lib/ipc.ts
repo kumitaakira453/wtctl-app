@@ -1,6 +1,8 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   BranchInfo,
+  ClaudeMessage,
+  ClaudeSession,
   CommitInfo,
   ConfigDto,
   FileChange,
@@ -37,6 +39,9 @@ export const api = {
     invoke<FileChange[]>("commit_files", { path, sha }),
   commitDiff: (path: string, sha: string, file: string, context: number) =>
     invoke<string>("commit_diff", { path, sha, file, context }),
+  claudeSessions: (path: string) => invoke<ClaudeSession[]>("claude_sessions", { path }),
+  claudeTranscript: (path: string, session: string) =>
+    invoke<ClaudeMessage[]>("claude_transcript", { path, session }),
 };
 
 /// アクション系コマンド。実行ログを onLog で逐次受け取り、完了時に resolve / 失敗で reject。

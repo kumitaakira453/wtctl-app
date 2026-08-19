@@ -99,3 +99,15 @@ function escapeHtml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }
+
+/// コードブロック全体を言語指定でハイライトする（未対応言語はエスケープのみ）。
+export function highlightCode(code: string, lang: string): string {
+  if (lang && hljs.getLanguage(lang)) {
+    try {
+      return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+    } catch {
+      /* fall through */
+    }
+  }
+  return escapeHtml(code);
+}

@@ -194,6 +194,20 @@ pub async fn commit_diff(path: String, sha: String, file: String, context: u32) 
     run_query(move |ctx| Ok(ctx.git.commit_diff(&path, &sha, &file, context))).await
 }
 
+#[tauri::command]
+pub async fn claude_sessions(path: String) -> Result<Vec<crate::domain::models::ClaudeSession>, WtError> {
+    tauri::async_runtime::spawn_blocking(move || crate::infra::claude::sessions(&path))
+        .await
+        .map_err(|e| WtError::new(e.to_string()))
+}
+
+#[tauri::command]
+pub async fn claude_transcript(path: String, session: String) -> Result<Vec<crate::domain::models::ClaudeMessage>, WtError> {
+    tauri::async_runtime::spawn_blocking(move || crate::infra::claude::transcript(&path, &session))
+        .await
+        .map_err(|e| WtError::new(e.to_string()))
+}
+
 /// `docker logs -f` を起動して行を Channel へストリームする（lazydocker 相当）。stream id を返す。
 #[tauri::command]
 pub fn start_container_logs(service: String, tail: u32, channel: Channel<LogEvent>) -> Result<u64, WtError> {

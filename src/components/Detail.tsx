@@ -16,6 +16,7 @@ import {
   vitesAtom,
   worktreesAtom,
 } from "../state/atoms";
+import { ClaudeSessions } from "./ClaudeSessions";
 import { CommitBrowser } from "./CommitBrowser";
 import { Icon } from "./Icon";
 import { Badge, Button } from "./ui";
@@ -33,6 +34,7 @@ export function Detail() {
   const setWorktrees = useSetAtom(worktreesAtom);
   const setSelected = useSetAtom(selectedPathAtom);
   const [scheme, setScheme] = useState<VerifyPlan | null>(null);
+  const [tab, setTab] = useState<"diff" | "claude">("diff");
   const [menu, setMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -196,9 +198,17 @@ export function Detail() {
         <PlanChips plan={plan} />
       </div>
 
-      {/* 差分ビューア（GitHub 風: コミット → ファイル → diff）で残り領域を埋める */}
+      {/* タブ: 差分 / Claude セッション */}
+      <div className="flex shrink-0 items-center gap-4 px-5">
+        <TabButton icon="difference" label="差分" on={tab === "diff"} onClick={() => setTab("diff")} />
+        <TabButton icon="forum" label="Claude セッション" on={tab === "claude"} onClick={() => setTab("claude")} />
+      </div>
       <div className="min-h-0 flex-1">
-        <CommitBrowser path={path} dirty={!!meta?.dirty} />
+        {tab === "diff" ? (
+          <CommitBrowser path={path} dirty={!!meta?.dirty} />
+        ) : (
+          <ClaudeSessions path={path} />
+        )}
       </div>
 
       {scheme && <VerifyScheme worktree={wt} plan={scheme} onClose={() => setScheme(null)} />}
@@ -244,6 +254,23 @@ function PlanChips({ plan }: { plan: VerifyPlan | undefined }) {
         </span>
       )}
     </>
+  );
+}
+
+function TabButton({ icon, label, on, onClick }: { icon: string; label: string; on: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1.5 py-2 text-[13px] font-medium transition-colors"
+      style={{
+        color: on ? "var(--wt-fg)" : "var(--wt-muted)",
+        borderBottom: `2px solid ${on ? "var(--wt-accent)" : "transparent"}`,
+      }}
+    >
+      <Icon name={icon} size={16} />
+      {label}
+    </button>
   );
 }
 
