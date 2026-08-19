@@ -1,4 +1,5 @@
 import { atom } from "jotai";
+import { atomWithStorage } from "jotai/utils";
 import type {
   LogEvent,
   MainFe,
@@ -14,7 +15,10 @@ import type {
 export type Theme = "dark" | "light";
 export type SortMode = "recent" | "name";
 
-export const themeAtom = atom<Theme>("dark");
+// 再起動しても保持されるよう localStorage に永続化する。
+export const themeAtom = atomWithStorage<Theme>("wtctl.theme", "dark", undefined, {
+  getOnInit: true,
+});
 
 export const repoStatusAtom = atom<RepoStatus | null>(null);
 export const updateInfoAtom = atom<UpdateInfo | null>(null);
@@ -31,7 +35,9 @@ export const prsAtom = atom<Record<string, PrInfo>>({});
 export const disksAtom = atom<Record<string, number>>({});
 
 export const selectedPathAtom = atom<string | null>(null);
-export const sortModeAtom = atom<SortMode>("recent");
+export const sortModeAtom = atomWithStorage<SortMode>("wtctl.sortMode", "recent", undefined, {
+  getOnInit: true,
+});
 export const searchAtom = atom<string>("");
 export const loadingAtom = atom<boolean>(false);
 

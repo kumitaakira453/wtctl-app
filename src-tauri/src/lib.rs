@@ -5,8 +5,40 @@ mod error;
 mod event;
 mod infra;
 
+/// GUI（Finder）起動ではログインシェルの PATH を継承しないため、docker/gh/npm 等の
+/// CLI が見つからない。ログインシェルから PATH を取り込み、一般的な場所も補う。
+fn fix_path() {
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    if let Ok(out) = std::process::Command::new(&shell)
+        .args(["-lic", "echo $PATH"])
+        .output()
+    {
+        if out.status.success() {
+            if let Some(line) = String::from_utf8_lossy(&out.stdout).lines().last() {
+                let p = line.trim();
+                if !p.is_empty() {
+                    std::env::set_var("PATH", p);
+                }
+            }
+        }
+    }
+    let mut path = std::env::var("PATH").unwrap_or_default();
+    let extra = [
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        "/Applications/Docker.app/Contents/Resources/bin",
+    ];
+    for dir in extra {
+        if std::path::Path::new(dir).exists() && !path.split(':').any(|x| x == dir) {
+            path = format!("{dir}:{path}");
+        }
+    }
+    std::env::set_var("PATH", path);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    fix_path();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
