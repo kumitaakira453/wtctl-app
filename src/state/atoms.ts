@@ -7,7 +7,6 @@ import type {
   PrInfo,
   RepoStatus,
   ServiceMount,
-  UpdateInfo,
   ViteProcess,
   WorktreeEntry,
 } from "../lib/types";
@@ -21,7 +20,11 @@ export const themeAtom = atomWithStorage<Theme>("wtctl.theme", "dark", undefined
 });
 
 export const repoStatusAtom = atom<RepoStatus | null>(null);
-export const updateInfoAtom = atom<UpdateInfo | null>(null);
+
+// 更新チェック（mdglow 準拠）: nonce をインクリメントすると再チェック、status は結果表示用。
+export type UpdateStatus = "idle" | "checking" | "available" | "uptodate" | "error";
+export const updateCheckNonceAtom = atom(0);
+export const updateStatusAtom = atom<UpdateStatus>("idle");
 
 export const worktreesAtom = atom<WorktreeEntry[]>([]);
 export const mainPathAtom = atom<string>("");

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "wtctl",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "com.wtctl.app",
   "build": {
     "frontendDist": "../dist",
@@ -28,9 +28,18 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/kumitaakira453/wtctl-app/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJCQzI4RkQ5QjJBN0Q5NkMKUldSczJhZXkyWS9DdTdiVWVOVXRHMDlCenc1bGJaL3JaZVdzekUyYU5VakMvdXdwQkhJUkc5eU0K"
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

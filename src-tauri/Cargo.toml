@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.1.1"
+version = "0.1.2"
 description = "wtctl desktop app"
 authors = ["Kumita Akira"]
 license = ""
@@ -24,6 +24,10 @@ tauri = { version = "2", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 # Rust 側は git/docker/gh の実行仲介が中心。実行時最適化よりコンパイルの速さを優先。
 [profile.release]

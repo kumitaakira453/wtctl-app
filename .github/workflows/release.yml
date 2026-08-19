@@ -52,10 +52,15 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 自動更新の署名（未設定だと updater 用アーティファクトが作れない）
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.event.inputs.tag || github.ref_name }}
           releaseName: "wtctl ${{ github.event.inputs.tag || github.ref_name }}"
           releaseBody: "macOS (Apple Silicon) 用インストーラ (.dmg) を下記 Assets からダウンロードしてください。"
           releaseDraft: true
           prerelease: false
+          # updater 用の latest.json を生成して Release に添付
+          includeUpdaterJson: true
           args: "--target aarch64-apple-darwin"

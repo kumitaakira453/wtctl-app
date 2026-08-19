@@ -43,6 +43,13 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            // 自動更新（デスクトップのみ）: mdglow と同じく updater + process を有効化
+            #[cfg(desktop)]
+            {
+                app.handle()
+                    .plugin(tauri_plugin_updater::Builder::new().build())?;
+                app.handle().plugin(tauri_plugin_process::init())?;
+            }
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -56,7 +63,6 @@ pub fn run() {
             commands::get_config,
             commands::set_config,
             commands::repo_status,
-            commands::check_update,
             commands::list_worktrees,
             commands::get_live,
             commands::get_metas,

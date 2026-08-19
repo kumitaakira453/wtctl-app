@@ -14,13 +14,12 @@ import { useActionRunner } from "./hooks/useAction";
 import { useDashboard } from "./hooks/useDashboard";
 import { api } from "./lib/ipc";
 import { AppContext } from "./state/app";
-import { repoStatusAtom, themeAtom, updateInfoAtom } from "./state/atoms";
+import { repoStatusAtom, themeAtom } from "./state/atoms";
 
 export default function App() {
   const theme = useAtomValue(themeAtom);
   const status = useAtomValue(repoStatusAtom);
   const setStatusOnly = useSetAtom(repoStatusAtom);
-  const setUpdate = useSetAtom(updateInfoAtom);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
 
@@ -38,9 +37,7 @@ export default function App() {
 
   useEffect(() => {
     reloadStatus();
-    // 起動時に最新リリースを確認し、新しければバナーでサジェストする
-    api.checkUpdate().then(setUpdate).catch(() => {});
-  }, [reloadStatus, setUpdate]);
+  }, [reloadStatus]);
 
   const appApi = {
     run,

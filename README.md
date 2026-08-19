@@ -133,9 +133,12 @@ git push origin v0.1.0
 
 ビルド完了後、[Releases](https://github.com/kumitaakira453/wtctl-app/releases) でドラフトを確認し、公開すると `.dmg` がダウンロード可能になる。コード署名・公証（notarization）は未設定のため、利用者側で初回に Gatekeeper の回避が必要（[インストール](#インストール使う人向け) 参照）。
 
-### 起動時の更新チェック
+### 自動更新
 
-private リポジトリのため updater プラグインによる自動インストールは使わず、**起動時に `gh` で最新リリースを確認し、現在より新しければ上部にバナーでサジェストする**方式（[ダウンロード]ボタンで Releases を開く）。`gh` 未導入/未認証なら何も出さない。同じバージョンは一度閉じれば再表示しない。
+`tauri-plugin-updater` による自動更新に対応（mdglow と同方式）。起動時に最新リリースの `latest.json` を確認し、新しいバージョンがあれば右下に通知を出す。「更新して再起動」でワンクリックのダウンロード＋インストール→再起動まで行う。
+
+- リリースは署名鍵で署名され、`latest.json` を Release に添付する（`release.yml` が `TAURI_SIGNING_PRIVATE_KEY` で生成）。
+- 更新エンドポイントは `releases/latest/download/latest.json`（public リポジトリ前提で匿名取得できる）。
 
 ---
 
