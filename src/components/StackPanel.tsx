@@ -11,7 +11,7 @@ export function StackPanel() {
   const [collapsed, setCollapsed] = useAtom(stackCollapsedAtom);
 
   return (
-    <div style={{ borderBottom: "1px solid var(--wt-border)", background: "var(--wt-sidebar)" }}>
+    <div style={{ borderTop: "1px solid var(--wt-border)", background: "var(--wt-sidebar)" }}>
       <button
         type="button"
         onClick={() => setCollapsed((v) => !v)}

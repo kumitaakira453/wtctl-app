@@ -67,10 +67,10 @@ export default function App() {
               <Sidebar onNew={() => setBranchOpen(true)} onSettings={() => setSettingsOpen(true)} />
               <div className="relative flex min-w-0 flex-1 flex-col">
                 <TopBar />
-                <StackPanel />
                 <div className="min-h-0 flex-1">
                   <Detail />
                 </div>
+                <StackPanel />
                 <LogDrawer />
               </div>
             </>
