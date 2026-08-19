@@ -1,4 +1,5 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useEffect, useState } from "react";
 import { useConfirm } from "../hooks/useConfirm";
 import { useApp } from "../state/app";
 import {
@@ -12,12 +13,30 @@ import {
   updateCheckNonceAtom,
   updateStatusAtom,
 } from "../state/atoms";
+import { Icon } from "./Icon";
 import { Button, IconButton, Spinner } from "./ui";
 
 function UpdateCheck() {
   const status = useAtomValue(updateStatusAtom);
   const setNonce = useSetAtom(updateCheckNonceAtom);
-  const check = () => setNonce((n) => n + 1);
+  // 手動確認の完了時だけ結果を数秒フラッシュ表示する（最新です / 確認失敗）
+  const [pending, setPending] = useState(false);
+  const [flash, setFlash] = useState<null | "uptodate" | "error">(null);
+  const check = () => {
+    setFlash(null);
+    setPending(true);
+    setNonce((n) => n + 1);
+  };
+
+  useEffect(() => {
+    if (!pending) return;
+    if (status === "uptodate" || status === "error") {
+      setPending(false);
+      setFlash(status);
+      const t = setTimeout(() => setFlash(null), 2500);
+      return () => clearTimeout(t);
+    }
+  }, [status, pending]);
 
   if (status === "checking") {
     return (
@@ -33,9 +52,27 @@ function UpdateCheck() {
       </Button>
     );
   }
-  const tip = status === "uptodate" ? "最新です（クリックで再確認）" : status === "error" ? "確認に失敗（再試行）" : "最新リリースを確認";
+  if (flash === "uptodate") {
+    return (
+      <span
+        className="wt-fade flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12px] font-medium"
+        style={{ color: "var(--wt-ok)", background: "color-mix(in srgb, var(--wt-ok) 14%, transparent)" }}
+        title="お使いのバージョンが最新です"
+      >
+        <Icon name="check_circle" size={15} />
+        最新です
+      </span>
+    );
+  }
+  if (flash === "error") {
+    return (
+      <Button size="sm" variant="ghost" icon="error" title="確認に失敗しました（クリックで再試行）" onClick={check}>
+        確認失敗
+      </Button>
+    );
+  }
   return (
-    <Button size="sm" variant="ghost" icon="download" title={tip} onClick={check}>
+    <Button size="sm" variant="ghost" icon="download" title="最新リリースを確認" onClick={check}>
       更新確認
     </Button>
   );
