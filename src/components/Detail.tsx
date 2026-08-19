@@ -1,12 +1,12 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { useConfirm } from "../hooks/useConfirm";
 import { api } from "../lib/ipc";
 import { formatSize, PR_COLOR } from "../lib/status";
 import type { VerifyPlan } from "../lib/types";
 import { useApp } from "../state/app";
-import { disksAtom, metasAtom, prsAtom, selectedWorktreeAtom } from "../state/atoms";
+import { disksAtom, metasAtom, prsAtom, selectedPathAtom, selectedWorktreeAtom, worktreesAtom } from "../state/atoms";
 import { ContainerList } from "./ContainerList";
 import { FePanel } from "./FePanel";
 import { Icon } from "./Icon";
@@ -20,6 +20,8 @@ export function Detail() {
   const disks = useAtomValue(disksAtom);
   const { run, runScheme } = useApp();
   const confirm = useConfirm();
+  const setWorktrees = useSetAtom(worktreesAtom);
+  const setSelected = useSetAtom(selectedPathAtom);
   const [scheme, setScheme] = useState<VerifyPlan | null>(null);
   const [menu, setMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -55,7 +57,13 @@ export function Detail() {
     const msg = dirty
       ? `${wt.name} に未コミット変更があります。破棄して${label}しますか？`
       : `${wt.name} を${label}しますか？`;
-    if (await confirm(msg, dirty)) await run(label, cmd, { path, force: dirty });
+    if (!(await confirm(msg, dirty))) return;
+    const ok = await run(label, cmd, { path, force: dirty });
+    if (ok) {
+      // 成功時は一覧から即座に除去し選択を外す（フル更新も afterDone で走る）
+      setWorktrees((list) => list.filter((w) => w.path !== path));
+      setSelected(null);
+    }
   };
 
   const rollbackMigration = async () => {

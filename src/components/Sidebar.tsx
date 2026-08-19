@@ -5,6 +5,8 @@ import { useApp } from "../state/app";
 import {
   metasAtom,
   mountsAtom,
+  type PrFilter,
+  prFilterAtom,
   prsAtom,
   searchAtom,
   selectedPathAtom,
@@ -20,6 +22,7 @@ export function Sidebar({ onNew, onSettings }: { onNew: () => void; onSettings: 
   const [selected, setSelected] = useAtom(selectedPathAtom);
   const [search, setSearch] = useAtom(searchAtom);
   const [sort, setSort] = useAtom(sortModeAtom);
+  const [prFilter, setPrFilter] = useAtom(prFilterAtom);
   const metas = useAtomValue(metasAtom);
   const mounts = useAtomValue(mountsAtom);
   const vites = useAtomValue(vitesAtom);
@@ -67,6 +70,35 @@ export function Sidebar({ onNew, onSettings }: { onNew: () => void; onSettings: 
             <Icon name={sort === "recent" ? "schedule" : "sort_by_alpha"} size={16} />
           </button>
         </div>
+      </div>
+
+      <div className="wt-no-drag flex flex-wrap gap-1 px-3 pb-2">
+        {(
+          [
+            ["all", "全て"],
+            ["open", "Open"],
+            ["merged", "Merged"],
+            ["closed", "Closed"],
+            ["none", "PR無"],
+          ] as [PrFilter, string][]
+        ).map(([k, label]) => {
+          const on = prFilter === k;
+          return (
+            <button
+              type="button"
+              key={k}
+              onClick={() => setPrFilter(k)}
+              className="rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors"
+              style={{
+                color: on ? "var(--wt-accent-fg)" : "var(--wt-muted)",
+                background: on ? "var(--wt-accent)" : "transparent",
+                border: `1px solid ${on ? "var(--wt-accent)" : "var(--wt-border)"}`,
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
@@ -136,9 +168,15 @@ export function Sidebar({ onNew, onSettings }: { onNew: () => void; onSettings: 
                   {meta?.commitRel ?? ""}
                 </span>
               </div>
-              {/* PR タイトル */}
+              {/* PR ステータス + タイトル */}
               {pr && (
                 <div className="mt-1 flex items-center gap-1.5">
+                  <span
+                    className="shrink-0 rounded px-1 text-[9px] font-bold uppercase"
+                    style={{ color: PR_COLOR[pr.state], border: `1px solid ${PR_COLOR[pr.state]}` }}
+                  >
+                    {pr.state}
+                  </span>
                   <span className="shrink-0 text-[10px] font-semibold" style={{ color: PR_COLOR[pr.state] }}>
                     #{pr.number}
                   </span>

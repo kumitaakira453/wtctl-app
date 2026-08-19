@@ -44,19 +44,29 @@ export const sortModeAtom = atomWithStorage<SortMode>("wtctl.sortMode", "recent"
 export const searchAtom = atom<string>("");
 export const loadingAtom = atom<boolean>(false);
 
-/// 検索フィルタ＋ソート済みの worktree 一覧。
+export type PrFilter = "all" | "open" | "merged" | "closed" | "none";
+export const prFilterAtom = atom<PrFilter>("all");
+
+/// 検索＋PR フィルタ＋ソート済みの worktree 一覧（(main) は常に先頭・常に表示）。
 export const visibleWorktreesAtom = atom((get) => {
   const list = [...get(worktreesAtom)];
   const q = get(searchAtom).trim().toLowerCase();
   const metas = get(metasAtom);
+  const prs = get(prsAtom);
   const sort = get(sortModeAtom);
-  const filtered = q
-    ? list.filter(
-        (w) =>
-          w.name.toLowerCase().includes(q) ||
-          (w.branch ?? "").toLowerCase().includes(q),
-      )
-    : list;
+  const prFilter = get(prFilterAtom);
+  const filtered = list.filter((w) => {
+    if (q && !(w.name.toLowerCase().includes(q) || (w.branch ?? "").toLowerCase().includes(q))) {
+      return false;
+    }
+    if (prFilter !== "all" && !w.isMain) {
+      const st = w.branch ? prs[w.branch]?.state : undefined;
+      if (prFilter === "open") return st === "open" || st === "draft";
+      if (prFilter === "none") return !st;
+      return st === prFilter;
+    }
+    return true;
+  });
   filtered.sort((a, b) => {
     // (main) は並び順に関わらず常に先頭固定
     if (a.isMain !== b.isMain) return a.isMain ? -1 : 1;

@@ -11,8 +11,9 @@ function basename(p: string): string {
   return normalizePath(p).split("/").pop() ?? p;
 }
 
+// mount 先は「場所」を示す。健全性（緑）と色が重複しないよう MAIN は中立色にする。
 const MOUNT_META: Record<MountState, { color: string; label: (m: ServiceMount) => string } | null> = {
-  main: { color: "var(--wt-ok)", label: () => "MAIN" },
+  main: { color: "var(--wt-muted)", label: () => "MAIN" },
   worktree: { color: "var(--wt-warn)", label: (m) => `WT:${basename(m.worktree ?? "")}` },
   down: null,
 };
@@ -85,8 +86,9 @@ export function ContainerList() {
                 <span className="shrink-0 font-mono text-[11px]" style={{ color: "var(--wt-muted)", width: 40, textAlign: "right" }}>
                   {port ? `:${port}` : "—"}
                 </span>
+                {/* health は緑ドットで示すため、異常時（応答なし/停止）のみテキストを出す */}
                 <span className="shrink-0 text-[11px]" style={{ color: h.color, width: 54, textAlign: "right" }}>
-                  {h.label}
+                  {h.label === "稼働中" ? "" : h.label}
                 </span>
                 {mount ? (
                   <span
@@ -115,7 +117,7 @@ export function ContainerList() {
         </div>
       )}
 
-      {logService && <LogsModal service={logService} onClose={() => setLogService(null)} />}
+      {logService && <LogsModal initial={logService} onClose={() => setLogService(null)} />}
     </div>
   );
 }

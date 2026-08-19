@@ -5,38 +5,62 @@ import { useApp, type Step } from "../state/app";
 import { Icon } from "./Icon";
 import { Button, Modal } from "./ui";
 
-function Check({
+function CheckBox({ on }: { on: boolean }) {
+  return (
+    <span
+      className="grid h-4 w-4 shrink-0 place-items-center rounded"
+      style={{
+        background: on ? "var(--wt-accent)" : "transparent",
+        border: `1.5px solid ${on ? "var(--wt-accent)" : "var(--wt-border-strong)"}`,
+      }}
+    >
+      {on && <Icon name="check" size={12} style={{ color: "var(--wt-accent-fg)" }} />}
+    </span>
+  );
+}
+
+/// 全幅・均一な行。左にチェック、右に任意の trailing 要素。
+function Row({
   on,
   onToggle,
   label,
   sub,
   disabled,
+  trailing,
+  children,
 }: {
   on: boolean;
   onToggle: () => void;
   label: string;
   sub?: string;
   disabled?: boolean;
+  trailing?: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={disabled}
-      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors"
-      style={{ background: on ? "var(--wt-accent-soft)" : "var(--wt-panel)", border: `1px solid ${on ? "var(--wt-accent)" : "var(--wt-border)"}`, opacity: disabled ? 0.5 : 1 }}
+    <div
+      className="rounded-lg"
+      style={{
+        background: on ? "var(--wt-accent-soft)" : "var(--wt-panel)",
+        border: `1px solid ${on ? "var(--wt-accent)" : "var(--wt-border)"}`,
+        opacity: disabled ? 0.5 : 1,
+      }}
     >
-      <span
-        className="grid h-4 w-4 shrink-0 place-items-center rounded"
-        style={{ background: on ? "var(--wt-accent)" : "transparent", border: `1.5px solid ${on ? "var(--wt-accent)" : "var(--wt-border-strong)"}` }}
+      <div
+        role="button"
+        onClick={disabled ? undefined : onToggle}
+        className="flex items-center gap-2.5 px-3 py-2"
+        style={{ cursor: disabled ? "default" : "pointer" }}
       >
-        {on && <Icon name="check" size={12} style={{ color: "var(--wt-accent-fg)" }} />}
-      </span>
-      <span className="min-w-0">
-        <span className="text-[13px] font-medium">{label}</span>
-        {sub && <span className="ml-2 text-[11px]" style={{ color: "var(--wt-muted)" }}>{sub}</span>}
-      </span>
-    </button>
+        <CheckBox on={on} />
+        <span className="min-w-0 flex-1 truncate">
+          <span className="text-[13px] font-medium">{label}</span>
+          {sub && <span className="ml-2 text-[11px]" style={{ color: "var(--wt-muted)" }}>{sub}</span>}
+        </span>
+        {trailing}
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -72,20 +96,11 @@ export function VerifyScheme({
         id: "be",
         title: "BE 差し替え",
         cmd: "be_apply",
-        args: {
-          path: worktree.path,
-          groups: [...groups],
-          buildGroups: [...builds].filter((g) => groups.has(g)),
-        },
+        args: { path: worktree.path, groups: [...groups], buildGroups: [...builds].filter((g) => groups.has(g)) },
       });
     }
     if (migration && migGroups.length > 0) {
-      steps.push({
-        id: "migration",
-        title: "migration 適用",
-        cmd: "migration_apply_all",
-        args: { groups: migGroups },
-      });
+      steps.push({ id: "migration", title: "migration 適用", cmd: "migration_apply_all", args: { groups: migGroups } });
     }
     if (fe) {
       steps.push({ id: "fe", title: "FE 起動", cmd: "fe", args: { path: worktree.path } });
@@ -107,51 +122,69 @@ export function VerifyScheme({
             const on = groups.has(g.key);
             const inDiff = plan.groups.includes(g.key);
             return (
-              <div key={g.key} className="flex items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <Check
-                    on={on}
-                    onToggle={() => setGroups((s) => toggle(s, g.key))}
-                    label={g.key}
-                    sub={inDiff ? "差分あり" : g.services.join(", ")}
-                  />
-                </div>
-                {on && (
+              <Row
+                key={g.key}
+                on={on}
+                onToggle={() => setGroups((s) => toggle(s, g.key))}
+                label={g.key}
+                sub={inDiff ? "差分あり" : g.services.join(", ")}
+                trailing={
                   <button
                     type="button"
-                    onClick={() => setBuilds((s) => toggle(s, g.key))}
-                    className="shrink-0 rounded-md px-2 py-1 text-[11px] font-medium"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (on) setBuilds((s) => toggle(s, g.key));
+                    }}
+                    disabled={!on}
+                    className="shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors"
                     style={{
                       color: builds.has(g.key) ? "var(--wt-warn)" : "var(--wt-muted)",
                       border: `1px solid ${builds.has(g.key) ? "var(--wt-warn)" : "var(--wt-border)"}`,
+                      opacity: on ? 1 : 0.35,
+                      cursor: on ? "pointer" : "default",
                     }}
                     title="依存を再ビルド（uv.lock/pyproject 変更時）"
                   >
                     build
                   </button>
-                )}
-              </div>
+                }
+              />
             );
           })}
         </div>
       </div>
 
-      <div className="mb-4 flex flex-col gap-1.5">
-        <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--wt-muted)" }}>
+      <div className="mb-4">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--wt-muted)" }}>
           その他
         </div>
-        <Check on={fe} onToggle={() => setFe((v) => !v)} label="FE を起動" sub=":3000 で Vite" />
-        <Check
-          on={migration}
-          onToggle={() => setMigration((v) => !v)}
-          disabled={plan.migrations.length === 0}
-          label="migration を適用"
-          sub={
-            plan.migrations.length === 0
-              ? "新規 migration なし"
-              : `${plan.migrations.length} 件（${migGroups.join(", ")}）`
-          }
-        />
+        <div className="flex flex-col gap-1.5">
+          <Row on={fe} onToggle={() => setFe((v) => !v)} label="FE を起動" sub=":3000 で Vite" />
+          <Row
+            on={migration}
+            onToggle={() => setMigration((v) => !v)}
+            disabled={plan.migrations.length === 0}
+            label="migration を適用"
+            sub={plan.migrations.length === 0 ? "新規 migration なし" : `${plan.migrations.length} 件（${migGroups.join(", ")}）`}
+          >
+            {migration && plan.migrations.length > 0 && (
+              <div className="px-3 pb-2" style={{ borderTop: "1px solid var(--wt-border)" }}>
+                <div className="mt-2 mb-1 text-[10px]" style={{ color: "var(--wt-muted)" }}>
+                  適用される migration（進める）
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  {plan.migrations.map((m) => (
+                    <div key={m.label} className="flex items-center gap-2 font-mono text-[11px]">
+                      <Icon name="arrow_upward" size={12} style={{ color: "var(--wt-ok)" }} />
+                      <span style={{ color: "var(--wt-muted)" }}>{m.group}/{m.app}:</span>
+                      <span style={{ color: "var(--wt-fg-dim)" }}>{m.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Row>
+        </div>
       </div>
 
       <div className="flex items-center justify-between">
