@@ -5,6 +5,8 @@ import {
   loadingAtom,
   mainFeAtom,
   mainFePortAtom,
+  sidebarOpenAtom,
+  stackOpenAtom,
   stackUpAtom,
   themeAtom,
   updateCheckNonceAtom,
@@ -45,6 +47,8 @@ export function TopBar() {
   const port = useAtomValue(mainFePortAtom);
   const loading = useAtomValue(loadingAtom);
   const [theme, setTheme] = useAtom(themeAtom);
+  const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
+  const [stackOpen, setStackOpen] = useAtom(stackOpenAtom);
   const { run, refresh } = useApp();
   const confirm = useConfirm();
 
@@ -56,6 +60,14 @@ export function TopBar() {
       className="wt-drag flex items-center gap-2 px-4"
       style={{ height: 52, borderBottom: "1px solid var(--wt-border)", background: "var(--wt-bg)" }}
     >
+      {/* 左パネル（worktree 一覧）表示トグル */}
+      <IconButton
+        icon={sidebarOpen ? "left_panel_close" : "left_panel_open"}
+        title={sidebarOpen ? "worktree 一覧を隠す" : "worktree 一覧を表示"}
+        active={!sidebarOpen}
+        onClick={() => setSidebarOpen((v) => !v)}
+      />
+
       {/* スタック状態 */}
       <div className="wt-no-drag flex h-[34px] items-center gap-2 rounded-lg pl-2.5 pr-1" style={{ background: "var(--wt-panel)" }}>
         <span className="inline-block rounded-full" style={{ width: 8, height: 8, background: stackUp ? "var(--wt-ok)" : "var(--wt-danger)" }} />
@@ -144,6 +156,13 @@ export function TopBar() {
           icon={theme === "dark" ? "light_mode" : "dark_mode"}
           title="テーマ切替"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+        />
+        {/* 右パネル（スタック）表示トグル */}
+        <IconButton
+          icon={stackOpen ? "right_panel_close" : "right_panel_open"}
+          title={stackOpen ? "スタックパネルを隠す" : "スタックパネルを表示"}
+          active={!stackOpen}
+          onClick={() => setStackOpen((v) => !v)}
         />
       </div>
     </div>

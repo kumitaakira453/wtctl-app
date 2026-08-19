@@ -20,9 +20,6 @@ export function StackPanel() {
         <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--wt-fg-dim)" }}>
           スタック
         </span>
-        <span className="text-[11px]" style={{ color: "var(--wt-muted)" }}>
-          全 worktree 共通
-        </span>
         <span
           className="ml-auto inline-flex items-center gap-1.5 text-[11px]"
           style={{ color: stackUp ? "var(--wt-ok)" : "var(--wt-muted)" }}

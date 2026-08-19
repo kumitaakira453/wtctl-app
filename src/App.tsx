@@ -15,10 +15,12 @@ import { useActionRunner } from "./hooks/useAction";
 import { useDashboard } from "./hooks/useDashboard";
 import { api } from "./lib/ipc";
 import { AppContext } from "./state/app";
-import { repoStatusAtom, themeAtom } from "./state/atoms";
+import { repoStatusAtom, sidebarOpenAtom, stackOpenAtom, themeAtom } from "./state/atoms";
 
 export default function App() {
   const theme = useAtomValue(themeAtom);
+  const sidebarOpen = useAtomValue(sidebarOpenAtom);
+  const stackOpen = useAtomValue(stackOpenAtom);
   const status = useAtomValue(repoStatusAtom);
   const setStatusOnly = useSetAtom(repoStatusAtom);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -64,7 +66,7 @@ export default function App() {
             </div>
           ) : (
             <>
-              <Sidebar onNew={() => setBranchOpen(true)} onSettings={() => setSettingsOpen(true)} />
+              {sidebarOpen && <Sidebar onNew={() => setBranchOpen(true)} onSettings={() => setSettingsOpen(true)} />}
               <div className="flex min-w-0 flex-1 flex-col">
                 <TopBar />
                 <div className="flex min-h-0 flex-1">
@@ -75,8 +77,8 @@ export default function App() {
                     </div>
                     <LogDrawer />
                   </div>
-                  {/* 右: 共通スタック（常設・ログに隠れない） */}
-                  <StackPanel />
+                  {/* 右: 共通スタック（表示 ON のとき常設・ログに隠れない） */}
+                  {stackOpen && <StackPanel />}
                 </div>
               </div>
             </>

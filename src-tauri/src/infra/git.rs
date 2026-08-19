@@ -300,69 +300,142 @@ impl Git {
 
     /// 1 コミット（または未コミット="WORKING"）で変わったファイル一覧。
     pub fn commit_files(&self, worktree: &str, sha: &str) -> Vec<crate::domain::models::FileChange> {
-        let working = sha == "WORKING";
-        let status_args: Vec<&str> = if working {
-            vec!["git", "-C", worktree, "status", "--porcelain"]
-        } else {
-            vec!["git", "-C", worktree, "show", "--format=", "--name-status", "-M", sha]
-        };
-        let numstat_args: Vec<&str> = if working {
-            vec!["git", "-C", worktree, "diff", "HEAD", "--numstat"]
-        } else {
-            vec!["git", "-C", worktree, "show", "--format=", "--numstat", "-M", sha]
-        };
-        // numstat: <add>\t<del>\t<path>（rename は path が `{old => new}` 記法）
-        let mut nums: HashMap<String, (i64, i64)> = HashMap::new();
-        for line in capture(&numstat_args, None, false).unwrap_or_default().lines() {
-            let cols: Vec<&str> = line.splitn(3, '\t').collect();
-            if cols.len() < 3 {
-                continue;
-            }
-            let add = cols[0].parse::<i64>().unwrap_or(-1);
-            let del = cols[1].parse::<i64>().unwrap_or(-1);
-            nums.insert(normalize_rename_path(cols[2]), (add, del));
+        use crate::domain::models::FileChange;
+        if sha == "WORKING" {
+            return self.working_files(worktree);
         }
-        let mut files: Vec<crate::domain::models::FileChange> = Vec::new();
-        for line in capture(&status_args, None, false).unwrap_or_default().lines() {
+        // committed: name-status（種別・パス）と numstat（増減）を突き合わせる
+        let ns = capture(
+            &[
+                "git", "-c", "core.quotePath=false", "-C", worktree, "show", "--format=",
+                "--name-status", "-M", sha,
+            ],
+            None,
+            false,
+        )
+        .unwrap_or_default();
+        let nums = self.numstat_map(&[
+            "git", "-c", "core.quotePath=false", "-C", worktree, "show", "--format=", "--numstat",
+            "-M", sha,
+        ]);
+        let mut files: Vec<FileChange> = Vec::new();
+        for line in ns.lines() {
             if line.trim().is_empty() {
                 continue;
             }
-            let (status, path) = if working {
-                // porcelain: "XY path"
-                let code = line.get(..2).unwrap_or("").trim();
-                let raw = line.get(3..).unwrap_or("").trim();
-                let path = raw.split(" -> ").last().unwrap_or(raw).to_string();
-                let st = code.chars().next().filter(|c| *c != ' ').unwrap_or('M').to_string();
-                (st, path)
-            } else {
-                let cols: Vec<&str> = line.splitn(2, '\t').collect();
-                if cols.len() < 2 {
-                    continue;
-                }
-                let st = cols[0].chars().next().unwrap_or('M').to_string();
-                let path = cols[1].split('\t').last().unwrap_or(cols[1]).to_string();
-                (st, path)
-            };
+            let cols: Vec<&str> = line.splitn(2, '\t').collect();
+            if cols.len() < 2 {
+                continue;
+            }
+            let status = cols[0].chars().next().unwrap_or('M').to_string();
+            let path = cols[1].split('\t').last().unwrap_or(cols[1]).to_string();
             let (add, del) = nums.get(&path).copied().unwrap_or((0, 0));
-            files.push(crate::domain::models::FileChange {
-                status,
-                path,
-                additions: add,
-                deletions: del,
+            files.push(FileChange { status, path, additions: add, deletions: del });
+        }
+        files.sort_by(|a, b| a.path.cmp(&b.path));
+        files
+    }
+
+    /// 作業ツリーの変更ファイル一覧（追跡変更 + 未追跡を個別ファイルとして列挙）。
+    fn working_files(&self, worktree: &str) -> Vec<crate::domain::models::FileChange> {
+        use crate::domain::models::FileChange;
+        let nums = self.numstat_map(&[
+            "git", "-c", "core.quotePath=false", "-C", worktree, "diff", "HEAD", "--numstat", "-M",
+        ]);
+        let mut files: Vec<FileChange> = Vec::new();
+        // 追跡ファイルの変更
+        let ns = capture(
+            &[
+                "git", "-c", "core.quotePath=false", "-C", worktree, "diff", "HEAD",
+                "--name-status", "-M",
+            ],
+            None,
+            false,
+        )
+        .unwrap_or_default();
+        for line in ns.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let cols: Vec<&str> = line.splitn(2, '\t').collect();
+            if cols.len() < 2 {
+                continue;
+            }
+            let status = cols[0].chars().next().unwrap_or('M').to_string();
+            let path = cols[1].split('\t').last().unwrap_or(cols[1]).to_string();
+            let (add, del) = nums.get(&path).copied().unwrap_or((0, 0));
+            files.push(FileChange { status, path, additions: add, deletions: del });
+        }
+        // 未追跡ファイル（ディレクトリではなく個別ファイル単位）
+        let others = capture(
+            &[
+                "git", "-c", "core.quotePath=false", "-C", worktree, "ls-files", "--others",
+                "--exclude-standard",
+            ],
+            None,
+            false,
+        )
+        .unwrap_or_default();
+        for path in others.lines() {
+            if path.trim().is_empty() {
+                continue;
+            }
+            files.push(FileChange {
+                status: "?".to_string(),
+                path: path.to_string(),
+                additions: 0,
+                deletions: 0,
             });
         }
         files.sort_by(|a, b| a.path.cmp(&b.path));
         files
     }
 
+    /// numstat 出力を path -> (add, del) にする（rename 記法は新パスに正規化）。
+    fn numstat_map(&self, args: &[&str]) -> HashMap<String, (i64, i64)> {
+        let mut map: HashMap<String, (i64, i64)> = HashMap::new();
+        for line in capture(args, None, false).unwrap_or_default().lines() {
+            let cols: Vec<&str> = line.splitn(3, '\t').collect();
+            if cols.len() < 3 {
+                continue;
+            }
+            let add = cols[0].parse::<i64>().unwrap_or(-1);
+            let del = cols[1].parse::<i64>().unwrap_or(-1);
+            map.insert(normalize_rename_path(cols[2]), (add, del));
+        }
+        map
+    }
+
     /// 指定ファイルの unified diff（コミットヘッダなし）。sha="WORKING" は作業ツリー差分。
+    /// WORKING で追跡差分が空（=未追跡ファイル）のときは全追加として表示する。
     pub fn commit_diff(&self, worktree: &str, sha: &str, path: &str) -> String {
-        let args: Vec<&str> = if sha == "WORKING" {
-            vec!["git", "-C", worktree, "diff", "HEAD", "--", path]
-        } else {
-            vec!["git", "-C", worktree, "show", "--format=", "-M", sha, "--", path]
-        };
-        capture(&args, None, false).unwrap_or_default()
+        if sha == "WORKING" {
+            let tracked = capture(
+                &["git", "-c", "core.quotePath=false", "-C", worktree, "diff", "HEAD", "--", path],
+                None,
+                false,
+            )
+            .unwrap_or_default();
+            if !tracked.trim().is_empty() {
+                return tracked;
+            }
+            // 未追跡ファイル: /dev/null との差分で全追加表示にする（--no-index は差分ありで exit 1）
+            return capture(
+                &[
+                    "git", "-c", "core.quotePath=false", "-C", worktree, "diff", "--no-index",
+                    "--", "/dev/null", path,
+                ],
+                None,
+                false,
+            )
+            .unwrap_or_default();
+        }
+        capture(
+            &["git", "-c", "core.quotePath=false", "-C", worktree, "show", "--format=", "-M", sha, "--", path],
+            None,
+            false,
+        )
+        .unwrap_or_default()
     }
 }
 

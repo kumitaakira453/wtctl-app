@@ -64,46 +64,48 @@ export function Sidebar({ onNew, onSettings }: { onNew: () => void; onSettings: 
             className="w-full bg-transparent text-sm outline-none"
             style={{ color: "var(--wt-fg)" }}
           />
-          <button
-            type="button"
-            onClick={() => setSort(sort === "recent" ? "name" : "recent")}
-            title={`並び順: ${sort === "recent" ? "最終更新↓" : "名前↑"}`}
-            className="wt-no-drag flex items-center"
-            style={{ color: "var(--wt-muted)" }}
-          >
-            <Icon name={sort === "recent" ? "schedule" : "sort_by_alpha"} size={16} />
-          </button>
         </div>
       </div>
 
-      <div className="wt-no-drag flex flex-wrap gap-1 px-3 pb-2">
-        {(
-          [
-            ["all", "全て", "var(--wt-muted)"],
-            ["open", "Open", PR_COLOR.open],
-            ["merged", "Merged", PR_COLOR.merged],
-            ["closed", "Closed", PR_COLOR.closed],
-            ["none", "PR無", "var(--wt-muted)"],
-          ] as [PrFilter, string, string][]
-        ).map(([k, label, color]) => {
-          const on = prFilter === k;
-          return (
-            <button
-              type="button"
-              key={k}
-              onClick={() => setPrFilter(k)}
-              className="rounded-md px-2 py-0.5 text-[11px] transition-colors"
-              style={{
-                color,
-                fontWeight: on ? 700 : 500,
-                background: on ? `color-mix(in srgb, ${color} 16%, transparent)` : "transparent",
-                border: `1px solid ${on ? color : "var(--wt-border)"}`,
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
+      <div className="wt-no-drag flex items-center gap-1 px-3 pb-2">
+        <div className="flex min-w-0 flex-1 flex-wrap gap-1">
+          {(
+            [
+              ["all", "全て", "var(--wt-muted)"],
+              ["open", "Open", PR_COLOR.open],
+              ["merged", "Merged", PR_COLOR.merged],
+              ["closed", "Closed", PR_COLOR.closed],
+              ["none", "PR無", "var(--wt-muted)"],
+            ] as [PrFilter, string, string][]
+          ).map(([k, label, color]) => {
+            const on = prFilter === k;
+            return (
+              <button
+                type="button"
+                key={k}
+                onClick={() => setPrFilter(k)}
+                className="rounded-md px-2 py-0.5 text-[11px] transition-colors"
+                style={{
+                  color,
+                  fontWeight: on ? 700 : 500,
+                  background: on ? `color-mix(in srgb, ${color} 16%, transparent)` : "transparent",
+                  border: `1px solid ${on ? color : "var(--wt-border)"}`,
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={() => setSort(sort === "recent" ? "name" : "recent")}
+          title={`並び順: ${sort === "recent" ? "最終更新↓" : "名前↑"}`}
+          className="flex shrink-0 items-center rounded-md p-1 transition-colors"
+          style={{ color: "var(--wt-muted)", border: "1px solid var(--wt-border)" }}
+        >
+          <Icon name={sort === "recent" ? "schedule" : "sort_by_alpha"} size={16} />
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
