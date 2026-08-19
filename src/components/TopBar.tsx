@@ -28,15 +28,21 @@ function UpdateCheck() {
     setNonce((n) => n + 1);
   };
 
+  // 手動確認の完了を検出してフラッシュをセット
   useEffect(() => {
-    if (!pending) return;
-    if (status === "uptodate" || status === "error") {
+    if (pending && (status === "uptodate" || status === "error")) {
       setPending(false);
       setFlash(status);
-      const t = setTimeout(() => setFlash(null), 2500);
-      return () => clearTimeout(t);
     }
   }, [status, pending]);
+
+  // フラッシュは一定時間で自動的に消す（検出 effect とは分離。同一 effect だと
+  // pending 変化で cleanup が走りタイマーが消えてフラッシュが固定化するため）
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 2500);
+    return () => clearTimeout(t);
+  }, [flash]);
 
   if (status === "checking") {
     return (
