@@ -1,0 +1,34 @@
+[package]
+name = "app"
+version = "0.1.0"
+description = "wtctl desktop app"
+authors = ["Kumita Akira"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+log = "0.4"
+tauri = { version = "2", features = [] }
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+
+# Rust 側は git/docker/gh の実行仲介が中心。実行時最適化よりコンパイルの速さを優先。
+[profile.release]
+opt-level = 1
+codegen-units = 256
+lto = false
+incremental = false
+strip = true

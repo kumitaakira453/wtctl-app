@@ -1,0 +1,154 @@
+@import "tailwindcss";
+
+/* ============================================================
+   フォント
+   ============================================================ */
+:root {
+  --wt-font-sans: system-ui, -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+  --wt-font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--wt-font-sans);
+  background: var(--wt-bg);
+  color: var(--wt-fg);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* Material Symbols */
+.material-symbols-rounded {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+  -webkit-font-smoothing: antialiased;
+  vertical-align: middle;
+}
+
+/* ============================================================
+   テーマトークン（ChatGPT デスクトップ調）
+   ============================================================ */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --wt-bg: #212121;
+  --wt-sidebar: #171717;
+  --wt-panel: #2a2a2a;
+  --wt-panel-2: #303030;
+  --wt-elevated: #353535;
+  --wt-fg: #ececec;
+  --wt-fg-dim: #c5c5c5;
+  --wt-muted: #8e8e8e;
+  --wt-border: rgba(255, 255, 255, 0.1);
+  --wt-border-strong: rgba(255, 255, 255, 0.18);
+  --wt-hover: rgba(255, 255, 255, 0.06);
+  --wt-active: rgba(255, 255, 255, 0.11);
+  --wt-accent: #10a37f;
+  --wt-accent-fg: #ffffff;
+  --wt-accent-soft: rgba(16, 163, 127, 0.16);
+  --wt-danger: #ef4444;
+  --wt-danger-soft: rgba(239, 68, 68, 0.14);
+  --wt-warn: #f59e0b;
+  --wt-ok: #22c55e;
+  --wt-info: #60a5fa;
+  --wt-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --wt-bg: #ffffff;
+  --wt-sidebar: #f9f9f9;
+  --wt-panel: #f7f7f8;
+  --wt-panel-2: #f0f0f1;
+  --wt-elevated: #ffffff;
+  --wt-fg: #1f2023;
+  --wt-fg-dim: #3a3b3f;
+  --wt-muted: #6b6c70;
+  --wt-border: rgba(0, 0, 0, 0.1);
+  --wt-border-strong: rgba(0, 0, 0, 0.16);
+  --wt-hover: rgba(0, 0, 0, 0.04);
+  --wt-active: rgba(0, 0, 0, 0.07);
+  --wt-accent: #10a37f;
+  --wt-accent-fg: #ffffff;
+  --wt-accent-soft: rgba(16, 163, 127, 0.12);
+  --wt-danger: #dc2626;
+  --wt-danger-soft: rgba(220, 38, 38, 0.1);
+  --wt-warn: #d97706;
+  --wt-ok: #16a34a;
+  --wt-info: #2563eb;
+  --wt-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+/* ============================================================
+   スクロールバー（薄く）
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--wt-border-strong);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--wt-muted);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ログの ANSI 風カラー */
+.log-line {
+  font-family: var(--wt-font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* アニメーション */
+@keyframes wt-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.wt-spin {
+  animation: wt-spin 0.8s linear infinite;
+}
+@keyframes wt-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.wt-fade {
+  animation: wt-fade 0.14s ease-out;
+}
+
+/* タイトルバー（macOS overlay）用のドラッグ領域 */
+.wt-drag {
+  -webkit-app-region: drag;
+}
+.wt-no-drag {
+  -webkit-app-region: no-drag;
+}

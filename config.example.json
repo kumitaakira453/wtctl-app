@@ -1,0 +1,4 @@
+{
+  "repo": "/absolute/path/to/wasurenai",
+  "worktree_dir": ".claude/worktrees"
+}
