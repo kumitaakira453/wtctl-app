@@ -48,12 +48,12 @@ export function LogDrawer() {
 
   return (
     <div
-      className="wt-fade absolute inset-x-0 bottom-0 z-40 flex flex-col"
+      className="wt-fade flex shrink-0 flex-col"
       style={{
-        height: "46%",
+        height: "38%",
+        minHeight: 200,
         background: "var(--wt-sidebar)",
         borderTop: "1px solid var(--wt-border-strong)",
-        boxShadow: "0 -10px 30px rgba(0,0,0,0.25)",
       }}
     >
       <div className="flex items-center gap-1 px-2" style={{ borderBottom: "1px solid var(--wt-border)" }}>

@@ -70,20 +70,20 @@ export default function App() {
               <div className="flex min-w-0 flex-1 flex-col">
                 <TopBar />
                 <div className="flex min-h-0 flex-1">
-                  {/* 中央: 選択 worktree の詳細。ログドロワーはこの領域の下部だけを覆う */}
-                  <div className="relative flex min-w-0 flex-1 flex-col">
-                    <div className="min-h-0 flex-1">
-                      <Detail />
-                    </div>
-                    <LogDrawer />
+                  {/* 中央: 選択 worktree の詳細 */}
+                  <div className="min-w-0 flex-1">
+                    <Detail />
                   </div>
-                  {/* 右: 共通スタック（表示 ON のとき常設・ログに隠れない） */}
+                  {/* 右: 共通スタック（表示 ON のとき常設） */}
                   {stackOpen && <StackPanel />}
                 </div>
               </div>
             </>
           )}
         </div>
+
+        {/* ログターミナルは画面下部の全幅ブロック（サイドバー・中央・スタックを横断） */}
+        {configured && <LogDrawer />}
 
         {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
         {branchOpen && <BranchPicker onClose={() => setBranchOpen(false)} />}
