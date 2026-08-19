@@ -1,6 +1,7 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useMemo, useState } from "react";
-import { highlightCode } from "../lib/highlight";
 import { api } from "../lib/ipc";
+import { renderMarkdown } from "../lib/markdown";
 import type { ClaudeBlock, ClaudeMessage, ClaudeSession } from "../lib/types";
 import { Icon } from "./Icon";
 import { Spinner } from "./ui";
@@ -10,53 +11,13 @@ function relTime(iso: string): string {
   return iso.replace("T", " ").slice(0, 16);
 }
 
-/// テキストを軽量 markdown 描画（フェンスコードはハイライト、インライン code は等幅）。
-function renderText(text: string): React.ReactNode {
-  const parts: React.ReactNode[] = [];
-  const fence = /```(\w*)\n?([\s\S]*?)```/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  let key = 0;
-  while ((m = fence.exec(text)) !== null) {
-    if (m.index > last) parts.push(<span key={key++}>{renderInline(text.slice(last, m.index))}</span>);
-    const lang = m[1] || "";
-    const code = m[2].replace(/\n$/, "");
-    parts.push(
-      <pre
-        key={key++}
-        className="hljs-diff my-1.5 overflow-x-auto rounded-md p-2.5 font-mono text-[11.5px] leading-[1.55]"
-        style={{ background: "var(--wt-panel-2)", border: "1px solid var(--wt-border)" }}
-        dangerouslySetInnerHTML={{ __html: highlightCode(code, lang) }}
-      />,
-    );
-    last = fence.lastIndex;
+/// markdown 内リンクのクリックは webview 遷移させず外部で開く。
+function onMdClick(e: React.MouseEvent) {
+  const a = (e.target as HTMLElement).closest("a");
+  if (a && a.getAttribute("href")) {
+    e.preventDefault();
+    void openUrl(a.getAttribute("href")!);
   }
-  if (last < text.length) parts.push(<span key={key++}>{renderInline(text.slice(last))}</span>);
-  return parts;
-}
-
-/// インライン `code` のみ等幅化。それ以外は改行保持で素通し。
-function renderInline(text: string): React.ReactNode {
-  const parts: React.ReactNode[] = [];
-  const re = /`([^`]+)`/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  let key = 0;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) parts.push(<span key={key++}>{text.slice(last, m.index)}</span>);
-    parts.push(
-      <code
-        key={key++}
-        className="rounded px-1 font-mono text-[12px]"
-        style={{ background: "var(--wt-panel-2)", color: "var(--wt-fg)" }}
-      >
-        {m[1]}
-      </code>,
-    );
-    last = re.lastIndex;
-  }
-  if (last < text.length) parts.push(<span key={key++}>{text.slice(last)}</span>);
-  return <span className="whitespace-pre-wrap">{parts}</span>;
 }
 
 function Collapsible({ icon, label, body, color }: { icon: string; label: string; body: string; color: string }) {
@@ -67,7 +28,7 @@ function Collapsible({ icon, label, body, color }: { icon: string; label: string
         {label}
       </summary>
       <pre
-        className="max-h-64 overflow-auto whitespace-pre-wrap break-all px-2.5 pb-2 font-mono text-[11px] leading-[1.5]"
+        className="max-h-72 overflow-auto whitespace-pre-wrap break-all px-2.5 pb-2 font-mono text-[11px] leading-[1.5]"
         style={{ color: "var(--wt-fg-dim)" }}
       >
         {body}
@@ -79,11 +40,34 @@ function Collapsible({ icon, label, body, color }: { icon: string; label: string
 function Block({ b }: { b: ClaudeBlock }) {
   switch (b.kind) {
     case "text":
-      return <div className="text-[13px] leading-relaxed" style={{ color: "var(--wt-fg)" }}>{renderText(b.text)}</div>;
+      return (
+        <div
+          className="md hljs-diff min-w-0"
+          onClick={onMdClick}
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(b.text) }}
+        />
+      );
+    case "command":
+      return (
+        <div
+          className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-mono text-[12px]"
+          style={{ background: "var(--wt-accent-soft)", color: "var(--wt-accent)" }}
+        >
+          <Icon name="terminal" size={13} />
+          {b.text}
+        </div>
+      );
+    case "interrupted":
+      return (
+        <div className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--wt-warn)" }}>
+          <Icon name="stop_circle" size={13} />
+          {b.text}
+        </div>
+      );
     case "thinking":
       return <Collapsible icon="neurology" label="思考" body={b.text} color="var(--wt-muted)" />;
     case "tool_use":
-      return <Collapsible icon="build" label={`ツール: ${b.name ?? ""}`} body={b.text} color="var(--wt-info)" />;
+      return <Collapsible icon="build" label={b.name ?? "ツール"} body={b.text} color="var(--wt-info)" />;
     case "tool_result":
       return <Collapsible icon="subdirectory_arrow_right" label="結果" body={b.text} color="var(--wt-muted)" />;
     case "image":
@@ -95,19 +79,21 @@ function Block({ b }: { b: ClaudeBlock }) {
 
 function MessageRow({ m }: { m: ClaudeMessage }) {
   const isUser = m.role === "user";
-  const hasHumanText = m.blocks.some((b) => b.kind === "text");
-  // ツール結果だけの user ターンは "Claude 実行" 側の文脈として淡く扱う
-  const label = isUser ? (hasHumanText ? "You" : "ツール結果") : "Claude";
-  const labelColor = isUser ? (hasHumanText ? "var(--wt-accent)" : "var(--wt-muted)") : "var(--wt-fg-dim)";
+  const hasSpeech = m.blocks.some((b) => b.kind === "text" || b.kind === "command");
+  // 人間の発話 / Claude の応答のみヘッダを出す。ツール結果だけのターンは淡く続ける。
+  const header = isUser ? (hasSpeech ? "You" : null) : "Claude";
+  const headerColor = isUser ? "var(--wt-accent)" : "var(--wt-fg-dim)";
   return (
-    <div className="px-4 py-2.5" style={{ borderBottom: "1px solid var(--wt-border)" }}>
-      <div className="mb-1 flex items-center gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: labelColor }}>
-          {label}
-        </span>
-        <span className="text-[10px]" style={{ color: "var(--wt-muted)" }}>{relTime(m.timestamp)}</span>
-      </div>
-      <div className="flex flex-col gap-0.5">
+    <div className="min-w-0 px-4 py-2.5" style={{ borderBottom: "1px solid var(--wt-border)" }}>
+      {header && (
+        <div className="mb-1 flex items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: headerColor }}>
+            {header}
+          </span>
+          <span className="text-[10px]" style={{ color: "var(--wt-muted)" }}>{relTime(m.timestamp)}</span>
+        </div>
+      )}
+      <div className="flex min-w-0 flex-col gap-1">
         {m.blocks.map((b, i) => (
           <Block key={i} b={b} />
         ))}
@@ -189,7 +175,7 @@ export function ClaudeSessions({ path }: { path: string }) {
                 {s.title}
               </span>
               <span className="flex items-center gap-1.5 text-[10.5px]" style={{ color: "var(--wt-muted)" }}>
-                <Icon name="chat" size={11} />
+                <Icon name="forum" size={11} />
                 {s.userCount}/{s.assistantCount}
                 <span>· {relTime(s.lastActive)}</span>
               </span>
@@ -211,7 +197,7 @@ export function ClaudeSessions({ path }: { path: string }) {
             </div>
           </div>
         )}
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           {msgs === null ? (
             <div className="flex h-full items-center justify-center">
               <Spinner size={16} />

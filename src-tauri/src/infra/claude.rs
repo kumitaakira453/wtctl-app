@@ -71,7 +71,9 @@ pub fn sessions(worktree: &str) -> Vec<ClaudeSession> {
 
 fn summarize(path: &Path, id: &str) -> Option<ClaudeSession> {
     let content = fs::read_to_string(path).ok()?;
-    let mut title = String::new();
+    let mut first_human = String::new();
+    let mut custom_title = String::new();
+    let mut last_prompt = String::new();
     let mut started = String::new();
     let mut last = String::new();
     let mut user_count = 0i64;
@@ -94,6 +96,23 @@ fn summarize(path: &Path, id: &str) -> Option<ClaudeSession> {
             }
         }
         let t = d.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        // Claude Code が付ける人間可読タイトル（最後のものを採用）
+        if t == "custom-title" {
+            if let Some(ct) = d.get("customTitle").and_then(|v| v.as_str()) {
+                if !ct.trim().is_empty() {
+                    custom_title = ct.trim().to_string();
+                }
+            }
+            continue;
+        }
+        if t == "last-prompt" {
+            if let Some(lp) = d.get("lastPrompt").and_then(|v| v.as_str()) {
+                if last_prompt.is_empty() && !lp.trim().is_empty() {
+                    last_prompt = lp.trim().to_string();
+                }
+            }
+            continue;
+        }
         let role = d
             .get("message")
             .and_then(|m| m.get("role"))
@@ -105,29 +124,58 @@ fn summarize(path: &Path, id: &str) -> Option<ClaudeSession> {
             if let Some(content) = d.get("message").and_then(|m| m.get("content")) {
                 let human: Vec<String> = content_text_blocks(content)
                     .into_iter()
-                    .filter(|s| is_human_text(s))
+                    .filter(|s| is_human_text(s) && !s.contains("<command-name>"))
                     .collect();
                 if !human.is_empty() {
                     user_count += 1;
-                    if title.is_empty() {
-                        title = human[0].trim().chars().take(90).collect();
+                    if first_human.is_empty() {
+                        first_human = human[0].trim().lines().next().unwrap_or("").chars().take(90).collect();
                     }
                 }
             }
         }
     }
-    if started.is_empty() && title.is_empty() {
+    if started.is_empty() && custom_title.is_empty() && first_human.is_empty() {
         return None; // 実質空のセッションは出さない
     }
+    // タイトル優先度: Claude 付与タイトル > 最初の依頼文の1行目 > lastPrompt の1行目
+    let title = if !custom_title.is_empty() {
+        custom_title
+    } else if !first_human.is_empty() {
+        first_human
+    } else if !last_prompt.is_empty() {
+        last_prompt.lines().next().unwrap_or("").chars().take(90).collect()
+    } else {
+        "(タイトルなし)".to_string()
+    };
     Some(ClaudeSession {
         id: id.to_string(),
-        title: if title.is_empty() { "(タイトルなし)".to_string() } else { title },
+        title,
         started,
         last_active: last,
         user_count,
         assistant_count,
         branch,
     })
+}
+
+/// `<command-name>/foo</command-name> ... <command-args>bar</command-args>` から
+/// 表示用のコマンド行 `/foo bar` を取り出す。
+fn extract_command(text: &str) -> Option<String> {
+    let name = between(text, "<command-name>", "</command-name>")?;
+    let args = between(text, "<command-args>", "</command-args>").unwrap_or_default();
+    let name = name.trim();
+    let args = args.trim();
+    if name.is_empty() {
+        return None;
+    }
+    Some(if args.is_empty() { name.to_string() } else { format!("{name} {args}") })
+}
+
+fn between(s: &str, open: &str, close: &str) -> Option<String> {
+    let i = s.find(open)? + open.len();
+    let j = s[i..].find(close)? + i;
+    Some(s[i..j].to_string())
 }
 
 fn truncate(s: &str) -> String {
@@ -158,23 +206,35 @@ fn stringify(v: &Value) -> String {
     }
 }
 
+/// user のテキストを種別判定して push する。コマンド呼び出しやユーザー中断は
+/// 専用ブロックにし、system-reminder 等のハーネス注入は落とす。
+fn push_user_text(blocks: &mut Vec<ClaudeBlock>, text: &str) {
+    if text.contains("[Request interrupted by user") || text.contains("interrupted by the user") {
+        blocks.push(ClaudeBlock { kind: "interrupted".into(), text: "ユーザーによる停止".into(), name: None });
+        return;
+    }
+    if text.contains("<command-name>") {
+        if let Some(cmd) = extract_command(text) {
+            blocks.push(ClaudeBlock { kind: "command".into(), text: cmd, name: None });
+        }
+        return;
+    }
+    if is_human_text(text) {
+        blocks.push(ClaudeBlock { kind: "text".into(), text: text.to_string(), name: None });
+    }
+}
+
 fn blocks_of(content: &Value) -> Vec<ClaudeBlock> {
     let mut blocks: Vec<ClaudeBlock> = Vec::new();
     match content {
-        Value::String(s) => {
-            if is_human_text(s) {
-                blocks.push(ClaudeBlock { kind: "text".into(), text: s.clone(), name: None });
-            }
-        }
+        Value::String(s) => push_user_text(&mut blocks, s),
         Value::Array(arr) => {
             for b in arr {
                 let ty = b.get("type").and_then(|v| v.as_str()).unwrap_or("");
                 match ty {
                     "text" => {
                         let t = b.get("text").and_then(|v| v.as_str()).unwrap_or("");
-                        if is_human_text(t) {
-                            blocks.push(ClaudeBlock { kind: "text".into(), text: t.to_string(), name: None });
-                        }
+                        push_user_text(&mut blocks, t);
                     }
                     "thinking" => {
                         let t = b.get("thinking").and_then(|v| v.as_str()).unwrap_or("");

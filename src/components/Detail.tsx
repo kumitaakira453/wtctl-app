@@ -16,6 +16,8 @@ import {
   vitesAtom,
   worktreesAtom,
 } from "../state/atoms";
+import type { ReactNode } from "react";
+import { ClaudeMark } from "./ClaudeMark";
 import { ClaudeSessions } from "./ClaudeSessions";
 import { CommitBrowser } from "./CommitBrowser";
 import { Icon } from "./Icon";
@@ -201,7 +203,12 @@ export function Detail() {
       {/* タブ: 差分 / Claude セッション */}
       <div className="flex shrink-0 items-center gap-4 px-5">
         <TabButton icon="difference" label="差分" on={tab === "diff"} onClick={() => setTab("diff")} />
-        <TabButton icon="forum" label="Claude セッション" on={tab === "claude"} onClick={() => setTab("claude")} />
+        <TabButton
+          node={<ClaudeMark size={16} />}
+          label="Claude セッション"
+          on={tab === "claude"}
+          onClick={() => setTab("claude")}
+        />
       </div>
       <div className="min-h-0 flex-1">
         {tab === "diff" ? (
@@ -257,7 +264,19 @@ function PlanChips({ plan }: { plan: VerifyPlan | undefined }) {
   );
 }
 
-function TabButton({ icon, label, on, onClick }: { icon: string; label: string; on: boolean; onClick: () => void }) {
+function TabButton({
+  icon,
+  node,
+  label,
+  on,
+  onClick,
+}: {
+  icon?: string;
+  node?: ReactNode;
+  label: string;
+  on: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
@@ -268,7 +287,7 @@ function TabButton({ icon, label, on, onClick }: { icon: string; label: string; 
         borderBottom: `2px solid ${on ? "var(--wt-accent)" : "transparent"}`,
       }}
     >
-      <Icon name={icon} size={16} />
+      {node ?? <Icon name={icon!} size={16} />}
       {label}
     </button>
   );

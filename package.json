@@ -1,7 +1,7 @@
 {
   "name": "wtctl-app",
   "private": true,
-  "version": "0.1.28",
+  "version": "0.1.29",
   "type": "module",
   "description": "wasurenai の git worktree を Docker スタックに差し替えて動作確認するデスクトップアプリ（wtctl の GUI 版）。",
   "scripts": {
@@ -21,6 +21,7 @@
     "@tauri-apps/plugin-updater": "^2.10.1",
     "highlight.js": "^11.12.0",
     "jotai": "^2.10.3",
+    "markdown-it": "^14.3.0",
     "material-symbols": "^0.45.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -28,6 +29,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
     "@tauri-apps/cli": "^2.11.4",
+    "@types/markdown-it": "^14.2.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
