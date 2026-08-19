@@ -1,13 +1,21 @@
 import { createContext, useContext } from "react";
 
+export interface Step {
+  id: string;
+  title: string;
+  cmd: string;
+  args: Record<string, unknown>;
+}
+
 export type RunFn = (
   title: string,
   cmd: string,
   args: Record<string, unknown>,
-) => Promise<void>;
+) => Promise<boolean>;
 
 export interface AppApi {
   run: RunFn;
+  runScheme: (steps: Step[]) => Promise<boolean>;
   refresh: () => Promise<void>;
   refreshLive: () => Promise<void>;
   ensureDisk: (path: string) => void;

@@ -26,6 +26,7 @@ export interface PrInfo {
   number: number;
   state: string; // "draft" | "open" | "merged" | "closed"
   url: string;
+  title: string;
 }
 
 export interface BranchInfo {

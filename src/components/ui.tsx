@@ -63,6 +63,7 @@ export function IconButton({
   disabled,
   active,
   size = 18,
+  box = 34,
 }: {
   icon: string;
   onClick?: () => void;
@@ -70,6 +71,7 @@ export function IconButton({
   disabled?: boolean;
   active?: boolean;
   size?: number;
+  box?: number;
 }) {
   return (
     <button
@@ -79,8 +81,8 @@ export function IconButton({
       title={title}
       className="wt-no-drag inline-flex items-center justify-center rounded-lg transition-colors"
       style={{
-        width: 34,
-        height: 34,
+        width: box,
+        height: box,
         color: active ? "var(--wt-accent)" : "var(--wt-fg-dim)",
         background: active ? "var(--wt-accent-soft)" : "transparent",
         opacity: disabled ? 0.4 : 1,

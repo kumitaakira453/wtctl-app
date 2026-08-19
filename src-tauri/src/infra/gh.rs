@@ -21,7 +21,7 @@ impl Gh {
         let out = Command::new("gh")
             .args([
                 "pr", "list", "--state", "all", "--limit", "300", "--json",
-                "number,headRefName,state,isDraft,url",
+                "number,headRefName,state,isDraft,url,title",
             ])
             .current_dir(repo)
             .stderr(Stdio::null())
@@ -59,6 +59,7 @@ impl Gh {
                 number: pr.get("number").and_then(|v| v.as_i64()).unwrap_or(0),
                 state: state.clone(),
                 url: pr.get("url").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                title: pr.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string(),
             };
             let replace = match result.get(&head) {
                 None => true,

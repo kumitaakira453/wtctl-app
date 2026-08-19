@@ -1,28 +1,36 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useAtomValue } from "jotai";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useConfirm } from "../hooks/useConfirm";
 import { api } from "../lib/ipc";
-import { formatSize, planChips, PR_COLOR } from "../lib/status";
+import { formatSize, PR_COLOR } from "../lib/status";
 import type { VerifyPlan } from "../lib/types";
 import { useApp } from "../state/app";
 import { disksAtom, metasAtom, prsAtom, selectedWorktreeAtom } from "../state/atoms";
-import { BeGroupModal } from "./BeGroupModal";
+import { ContainerList } from "./ContainerList";
 import { FePanel } from "./FePanel";
 import { Icon } from "./Icon";
-import { MigrationModal } from "./MigrationModal";
-import { MountsPanel } from "./MountsPanel";
-import { Badge, Button } from "./ui";
+import { Badge, Button, IconButton } from "./ui";
+import { VerifyScheme } from "./VerifyScheme";
 
 export function Detail() {
   const wt = useAtomValue(selectedWorktreeAtom);
   const metas = useAtomValue(metasAtom);
   const prs = useAtomValue(prsAtom);
   const disks = useAtomValue(disksAtom);
-  const { run } = useApp();
+  const { run, runScheme } = useApp();
   const confirm = useConfirm();
-  const [beGroupOpen, setBeGroupOpen] = useState(false);
-  const [migPlan, setMigPlan] = useState<VerifyPlan | null>(null);
+  const [scheme, setScheme] = useState<VerifyPlan | null>(null);
+  const [menu, setMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(false);
+    };
+    window.addEventListener("mousedown", onClick);
+    return () => window.removeEventListener("mousedown", onClick);
+  }, []);
 
   if (!wt) {
     return (
@@ -37,72 +45,58 @@ export function Detail() {
   const plan = entry?.plan;
   const meta = entry?.meta;
   const pr = wt.branch ? prs[wt.branch] : undefined;
-  const chips = planChips(plan);
 
-  const getPlan = async (): Promise<VerifyPlan> => plan ?? (await api.planFor(path));
-
-  const onVerify = async () => {
-    const p = await getPlan();
-    if (p.error) return;
-    if (p.isEmpty) {
-      if (!(await confirm(`${wt.name} に検証対象の差分がありません。それでも実行しますか？`))) return;
-    }
-    if (await confirm(`${wt.name} を検証（BE+FE）しますか？`)) {
-      await run(`verify: ${wt.name}`, "verify", { path });
-    }
-  };
-
-  const onBe = async () => {
-    const p = await getPlan();
-    if (p.hasBackend) {
-      if (await confirm(`${wt.name} の BE を差し替えますか？（${p.groups.join(",")}）`)) {
-        await run("BE 差し替え", "be_apply", { path, groups: p.groups, buildGroups: p.buildGroups });
-      }
-    } else {
-      setBeGroupOpen(true);
-    }
-  };
-
-  const onBeGroupPick = async (group: string) => {
-    setBeGroupOpen(false);
-    if (await confirm(`${wt.name} の ${group} を起動し直しますか？（差分なし・指定）`)) {
-      await run("BE 差し替え", "be_apply", { path, groups: [group], buildGroups: [] });
-    }
-  };
-
-  const onFe = async () => {
-    if (await confirm(`${wt.name} の FE を :3000 で起動しますか？`)) {
-      await run("FE 起動", "fe", { path });
-    }
-  };
-
-  const onMigration = async () => setMigPlan(await getPlan());
+  const openScheme = async () => setScheme(plan ?? (await api.planFor(path)));
 
   const removeAction = async (cmd: "delete_worktree" | "teardown_worktree", label: string) => {
+    setMenu(false);
     const dirty = await api.isDirty(path);
     const msg = dirty
       ? `${wt.name} に未コミット変更があります。破棄して${label}しますか？`
       : `${wt.name} を${label}しますか？`;
-    if (await confirm(msg, dirty)) {
-      await run(label, cmd, { path, force: dirty });
+    if (await confirm(msg, dirty)) await run(label, cmd, { path, force: dirty });
+  };
+
+  const rollbackMigration = async () => {
+    setMenu(false);
+    const p = plan ?? (await api.planFor(path));
+    if (p.migrations.length === 0) return;
+    if (await confirm(`${wt.name} の migration を base まで巻き戻しますか？`, true)) {
+      await runScheme([
+        {
+          id: "rollback",
+          title: "migration 戻し",
+          cmd: "migration_rollback_to_base",
+          args: {
+            worktree: path,
+            base: p.base,
+            apps: p.migrations.map((m) => ({ group: m.group, app: m.app, appdir: m.appdir })),
+          },
+        },
+      ]);
     }
+  };
+
+  const planSummary = () => {
+    if (!plan) return "…";
+    if (plan.error) return "detect error";
+    const parts: string[] = [];
+    if (plan.groups.length) parts.push(`BE: ${plan.groups.join(", ")}`);
+    if (plan.fe) parts.push("FE");
+    if (plan.migrations.length) parts.push(`migration ×${plan.migrations.length}`);
+    return parts.length ? parts.join(" ・ ") : "変更なし";
   };
 
   return (
     <div className="h-full overflow-y-auto p-5">
       {/* ヘッダ */}
-      <div className="mb-4">
+      <div className="mb-5">
         <div className="flex items-center gap-2">
           {wt.created && <Icon name="add_circle" size={16} style={{ color: "var(--wt-accent)" }} />}
           <span className="text-xl font-semibold tracking-tight">{wt.isMain ? "(main)" : wt.name}</span>
           {meta?.dirty && <Badge color="var(--wt-warn)" soft>● 変更あり</Badge>}
           {pr && (
-            <button
-              type="button"
-              onClick={() => void openUrl(pr.url)}
-              title="PR を開く"
-              className="wt-no-drag"
-            >
+            <button type="button" onClick={() => void openUrl(pr.url)} title="PR を開く" className="wt-no-drag">
               <Badge color={PR_COLOR[pr.state]} soft>
                 #{pr.number} {pr.state}
               </Badge>
@@ -110,7 +104,10 @@ export function Detail() {
           )}
         </div>
         <div className="mt-1 flex items-center gap-3 text-[12px]" style={{ color: "var(--wt-muted)" }}>
-          <span className="font-mono">{wt.branch ?? wt.head ?? "?"}{meta && meta.ahead > 0 ? ` +${meta.ahead}` : ""}</span>
+          <span className="font-mono">
+            {wt.branch ?? wt.head ?? "?"}
+            {meta && meta.ahead > 0 ? ` +${meta.ahead}` : ""}
+          </span>
           {meta && <span>· {meta.commitRel}</span>}
           <span>· {formatSize(disks[path])}</span>
           {meta && !meta.hasUpstream && <Badge color="var(--wt-accent2, #a78bfa)">未 push</Badge>}
@@ -122,50 +119,66 @@ export function Detail() {
         )}
       </div>
 
-      {/* プラン chips */}
-      <div className="mb-4 flex flex-wrap items-center gap-1.5">
-        {chips.map((c) => (
-          <Badge key={c} color={c === "変更なし" ? "var(--wt-muted)" : "var(--wt-accent)"} soft={c !== "変更なし"}>
-            {c}
-          </Badge>
-        ))}
-      </div>
-
-      {/* アクション */}
-      <div className="mb-5 flex flex-wrap gap-2">
-        <Button variant="primary" icon="play_arrow" onClick={onVerify}>
+      {/* アクション: 検証（スキーム）が主。ライフサイクルは ⋯ メニュー。 */}
+      <div className="mb-5 flex items-center gap-2">
+        <Button variant="primary" icon="play_arrow" onClick={openScheme}>
           検証
         </Button>
-        <Button icon="dns" onClick={onBe}>
-          BE 差し替え
-        </Button>
-        <Button icon="web" onClick={onFe}>
-          FE 起動
-        </Button>
-        <Button icon="database" onClick={onMigration} disabled={!plan || plan.migrations.length === 0}>
-          migration
-        </Button>
-        <div className="flex-1" />
-        {!wt.isMain && (
-          <>
-            <Button variant="ghost" icon="delete" onClick={() => removeAction("delete_worktree", "削除")}>
-              削除
-            </Button>
-            <Button variant="ghost" icon="eject" onClick={() => removeAction("teardown_worktree", "撤去")}>
-              撤去
-            </Button>
-          </>
-        )}
+        <span className="text-[12px]" style={{ color: "var(--wt-muted)" }}>
+          {planSummary()}
+        </span>
+        <div className="relative ml-auto" ref={menuRef}>
+          <IconButton icon="more_horiz" title="その他" onClick={() => setMenu((v) => !v)} active={menu} />
+          {menu && (
+            <div
+              className="wt-fade absolute right-0 z-20 mt-1 w-60 overflow-hidden rounded-xl py-1"
+              style={{ background: "var(--wt-bg)", border: "1px solid var(--wt-border-strong)", boxShadow: "var(--wt-shadow)" }}
+            >
+              {plan && plan.migrations.length > 0 && (
+                <MenuItem icon="undo" label="migration を base へ戻す" onClick={rollbackMigration} />
+              )}
+              {!wt.isMain && (
+                <>
+                  <MenuItem icon="delete" label="worktree を削除" onClick={() => removeAction("delete_worktree", "削除")} />
+                  <MenuItem
+                    icon="drive_file_move"
+                    label="削除してメインで開く"
+                    onClick={() => removeAction("teardown_worktree", "撤去")}
+                  />
+                </>
+              )}
+              {wt.isMain && plan?.migrations.length === 0 && (
+                <div className="px-3 py-2 text-[12px]" style={{ color: "var(--wt-muted)" }}>
+                  操作はありません
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* パネル */}
       <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-        <MountsPanel />
+        <ContainerList />
         <FePanel />
       </div>
 
-      {beGroupOpen && <BeGroupModal onPick={onBeGroupPick} onClose={() => setBeGroupOpen(false)} />}
-      {migPlan && <MigrationModal worktree={path} plan={migPlan} onClose={() => setMigPlan(null)} />}
+      {scheme && <VerifyScheme worktree={wt} plan={scheme} onClose={() => setScheme(null)} />}
     </div>
+  );
+}
+
+function MenuItem({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] transition-colors"
+      style={{ color: "var(--wt-fg)" }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--wt-hover)")}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+    >
+      <Icon name={icon} size={16} style={{ color: "var(--wt-muted)" }} />
+      {label}
+    </button>
   );
 }

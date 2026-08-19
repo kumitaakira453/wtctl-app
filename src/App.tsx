@@ -25,7 +25,7 @@ export default function App() {
 
   const configured = status?.configured ?? false;
   const dash = useDashboard(configured);
-  const run = useActionRunner(() => void dash.refresh());
+  const { run, runScheme } = useActionRunner(() => void dash.refresh());
 
   const reloadStatus = useCallback(() => {
     api.repoStatus().then(setStatusOnly).catch(() => {});
@@ -41,6 +41,7 @@ export default function App() {
 
   const appApi = {
     run,
+    runScheme,
     refresh: dash.refresh,
     refreshLive: dash.refreshLive,
     ensureDisk: dash.ensureDisk,

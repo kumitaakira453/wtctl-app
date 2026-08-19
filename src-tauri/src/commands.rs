@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::ipc::Channel;
 
@@ -171,8 +171,8 @@ pub async fn migration_show(group: String, app: String) -> Result<String, WtErro
 }
 
 #[tauri::command]
-pub async fn rollback_target(worktree: String, appdir: String, base: Option<String>) -> Result<String, WtError> {
-    run_query(move |ctx| Ok(migration::rollback_target(ctx, &worktree, &appdir, base.as_deref()))).await
+pub async fn container_logs(service: String, tail: u32) -> Result<String, WtError> {
+    run_query(move |ctx| Ok(ctx.docker.logs(&service, tail))).await
 }
 
 // ---------------------------------------------------------------- アクション
@@ -254,17 +254,25 @@ pub async fn migration_apply_all(groups: Vec<String>, channel: Channel<LogEvent>
     run_action(channel, move |ctx, sink| migration::apply_all(ctx, &groups, sink)).await
 }
 
-#[tauri::command]
-pub async fn migration_apply(group: String, app: String, channel: Channel<LogEvent>) -> Result<(), WtError> {
-    run_action(channel, move |ctx, sink| migration::apply(ctx, &group, &app, sink)).await
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppRef {
+    group: String,
+    app: String,
+    appdir: String,
 }
 
 #[tauri::command]
-pub async fn migration_rollback(
-    group: String,
-    app: String,
-    target: String,
+pub async fn migration_rollback_to_base(
+    worktree: String,
+    base: Option<String>,
+    apps: Vec<AppRef>,
     channel: Channel<LogEvent>,
 ) -> Result<(), WtError> {
-    run_action(channel, move |ctx, sink| migration::rollback(ctx, &group, &app, &target, sink)).await
+    run_action(channel, move |ctx, sink| {
+        let tuples: Vec<(String, String, String)> =
+            apps.into_iter().map(|a| (a.group, a.app, a.appdir)).collect();
+        migration::rollback_to_base(ctx, &worktree, base.as_deref(), &tuples, sink)
+    })
+    .await
 }

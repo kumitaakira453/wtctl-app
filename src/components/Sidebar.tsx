@@ -103,21 +103,7 @@ export function Sidebar({ onNew, onSettings }: { onNew: () => void; onSettings: 
                     ●
                   </span>
                 )}
-                <span className="ml-auto shrink-0 text-[10px]" style={{ color: "var(--wt-muted)" }}>
-                  {meta?.commitRel ?? ""}
-                </span>
-              </div>
-              <div className="mt-0.5 flex items-center gap-2">
-                <span className="truncate text-[11px]" style={{ color: "var(--wt-muted)" }}>
-                  {w.branch ?? w.head ?? "?"}
-                  {meta && meta.ahead > 0 ? ` +${meta.ahead}` : ""}
-                </span>
-                <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                  {pr && (
-                    <span className="text-[10px] font-semibold" style={{ color: PR_COLOR[pr.state] }}>
-                      #{pr.number}
-                    </span>
-                  )}
+                <div className="ml-auto flex shrink-0 items-center gap-1">
                   {active && (
                     <span
                       className="rounded px-1 text-[9px] font-bold"
@@ -136,6 +122,31 @@ export function Sidebar({ onNew, onSettings }: { onNew: () => void; onSettings: 
                   )}
                 </div>
               </div>
+              {/* 直前のコミット件名 */}
+              <div className="mt-0.5 truncate text-[11px]" style={{ color: "var(--wt-fg-dim)" }}>
+                {meta?.subject || "—"}
+              </div>
+              {/* ブランチ + 相対時刻 */}
+              <div className="mt-0.5 flex items-center gap-2">
+                <span className="truncate font-mono text-[10px]" style={{ color: "var(--wt-muted)" }}>
+                  {w.branch ?? w.head ?? "?"}
+                  {meta && meta.ahead > 0 ? ` +${meta.ahead}` : ""}
+                </span>
+                <span className="ml-auto shrink-0 text-[10px]" style={{ color: "var(--wt-muted)" }}>
+                  {meta?.commitRel ?? ""}
+                </span>
+              </div>
+              {/* PR タイトル */}
+              {pr && (
+                <div className="mt-1 flex items-center gap-1.5">
+                  <span className="shrink-0 text-[10px] font-semibold" style={{ color: PR_COLOR[pr.state] }}>
+                    #{pr.number}
+                  </span>
+                  <span className="truncate text-[10px]" style={{ color: "var(--wt-muted)" }}>
+                    {pr.title}
+                  </span>
+                </div>
+              )}
             </button>
           );
         })}

@@ -1,42 +1,59 @@
 import { useSetAtom } from "jotai";
 import { useCallback } from "react";
 import { errorMessage, runAction } from "../lib/ipc";
-import type { RunFn } from "../state/app";
-import {
-  actionLogAtom,
-  actionOpenAtom,
-  actionResultAtom,
-  actionRunningAtom,
-  actionTitleAtom,
-} from "../state/atoms";
+import type { Step } from "../state/app";
+import { actionActiveAtom, actionOpenAtom, actionTabsAtom } from "../state/atoms";
 
-/// ストリーミングアクションを実行し、ログドロワーの状態を更新する。
-/// 完了後に afterDone（ダッシュボード更新）を呼ぶ。
-export function useActionRunner(afterDone: () => void): RunFn {
+/// 検証スキーム等の複数ステップを順に実行し、各ステップをタブに分けてログを保持する。
+/// 完了後に afterDone（ダッシュボード更新）を呼ぶ。1 ステップ失敗で以降は中断。
+export function useActionRunner(afterDone: () => void) {
   const setOpen = useSetAtom(actionOpenAtom);
-  const setTitle = useSetAtom(actionTitleAtom);
-  const setRunning = useSetAtom(actionRunningAtom);
-  const setResult = useSetAtom(actionResultAtom);
-  const setLog = useSetAtom(actionLogAtom);
+  const setTabs = useSetAtom(actionTabsAtom);
+  const setActive = useSetAtom(actionActiveAtom);
 
-  return useCallback<RunFn>(
-    async (title, cmd, args) => {
-      setLog([]);
-      setResult(null);
-      setTitle(title);
-      setRunning(true);
+  const runScheme = useCallback(
+    async (steps: Step[]): Promise<boolean> => {
+      if (steps.length === 0) return true;
       setOpen(true);
-      try {
-        await runAction(cmd, args, (e) => setLog((l) => [...l, e]));
-        setResult("ok");
-      } catch (e) {
-        setLog((l) => [...l, { kind: "error", text: errorMessage(e) }]);
-        setResult("error");
-      } finally {
-        setRunning(false);
-        afterDone();
+      setTabs(steps.map((s) => ({ id: s.id, title: s.title, log: [], running: false, result: null })));
+      setActive(steps[0].id);
+      let ok = true;
+      for (const s of steps) {
+        setActive(s.id);
+        setTabs((tabs) => tabs.map((t) => (t.id === s.id ? { ...t, running: true } : t)));
+        try {
+          await runAction(s.cmd, s.args, (e) =>
+            setTabs((tabs) => tabs.map((t) => (t.id === s.id ? { ...t, log: [...t.log, e] } : t))),
+          );
+          setTabs((tabs) => tabs.map((t) => (t.id === s.id ? { ...t, running: false, result: "ok" } : t)));
+        } catch (err) {
+          ok = false;
+          setTabs((tabs) =>
+            tabs.map((t) =>
+              t.id === s.id
+                ? {
+                    ...t,
+                    running: false,
+                    result: "error",
+                    log: [...t.log, { kind: "error", text: errorMessage(err) }],
+                  }
+                : t,
+            ),
+          );
+          break;
+        }
       }
+      afterDone();
+      return ok;
     },
-    [afterDone, setLog, setOpen, setResult, setRunning, setTitle],
+    [afterDone, setActive, setOpen, setTabs],
   );
+
+  const run = useCallback(
+    (title: string, cmd: string, args: Record<string, unknown>) =>
+      runScheme([{ id: title, title, cmd, args }]),
+    [runScheme],
+  );
+
+  return { run, runScheme };
 }

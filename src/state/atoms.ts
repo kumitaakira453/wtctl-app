@@ -80,9 +80,16 @@ export interface ConfirmRequest {
 }
 export const confirmAtom = atom<ConfirmRequest | null>(null);
 
-// --- アクション実行（ログドロワー） ---
+// --- アクション実行（タブ付きログドロワー） ---
+// 検証スキームは複数ステップ（BE / migration / FE）を順に実行し、各ステップを
+// タブに分けてログを保持する（後のステップで前のログが消えない）。
+export interface ActionTab {
+  id: string;
+  title: string;
+  log: LogEvent[];
+  running: boolean;
+  result: "ok" | "error" | null;
+}
 export const actionOpenAtom = atom(false);
-export const actionTitleAtom = atom("");
-export const actionRunningAtom = atom(false);
-export const actionResultAtom = atom<"ok" | "error" | null>(null);
-export const actionLogAtom = atom<LogEvent[]>([]);
+export const actionTabsAtom = atom<ActionTab[]>([]);
+export const actionActiveAtom = atom<string>("");

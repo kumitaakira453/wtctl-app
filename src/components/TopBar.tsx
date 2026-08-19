@@ -1,8 +1,44 @@
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useConfirm } from "../hooks/useConfirm";
 import { useApp } from "../state/app";
-import { loadingAtom, mainFeAtom, mainFePortAtom, stackUpAtom, themeAtom } from "../state/atoms";
+import {
+  loadingAtom,
+  mainFeAtom,
+  mainFePortAtom,
+  stackUpAtom,
+  themeAtom,
+  updateCheckNonceAtom,
+  updateStatusAtom,
+} from "../state/atoms";
 import { Button, IconButton, Spinner } from "./ui";
+
+function UpdateCheck() {
+  const status = useAtomValue(updateStatusAtom);
+  const setNonce = useSetAtom(updateCheckNonceAtom);
+  if (status === "checking") {
+    return (
+      <span className="flex h-[34px] w-[34px] items-center justify-center" title="更新を確認中">
+        <Spinner size={15} />
+      </span>
+    );
+  }
+  const tip =
+    status === "available"
+      ? "更新があります"
+      : status === "uptodate"
+        ? "最新です（クリックで再確認）"
+        : status === "error"
+          ? "確認に失敗（クリックで再試行）"
+          : "更新を確認";
+  return (
+    <IconButton
+      icon="system_update_alt"
+      title={tip}
+      active={status === "available"}
+      onClick={() => setNonce((n) => n + 1)}
+    />
+  );
+}
 
 export function TopBar() {
   const stackUp = useAtomValue(stackUpAtom);
@@ -14,11 +50,7 @@ export function TopBar() {
   const confirm = useConfirm();
 
   const feLabel = mainFe.responding ? "稼働中" : mainFe.listening ? "応答なし" : "停止";
-  const feColor = mainFe.responding
-    ? "var(--wt-ok)"
-    : mainFe.listening
-      ? "var(--wt-warn)"
-      : "var(--wt-muted)";
+  const feColor = mainFe.responding ? "var(--wt-ok)" : mainFe.listening ? "var(--wt-warn)" : "var(--wt-muted)";
 
   return (
     <div
@@ -26,16 +58,14 @@ export function TopBar() {
       style={{ height: 52, borderBottom: "1px solid var(--wt-border)", background: "var(--wt-bg)" }}
     >
       {/* スタック状態 */}
-      <div className="wt-no-drag flex items-center gap-2 rounded-lg px-2.5 py-1.5" style={{ background: "var(--wt-panel)" }}>
-        <span
-          className="inline-block rounded-full"
-          style={{ width: 8, height: 8, background: stackUp ? "var(--wt-ok)" : "var(--wt-danger)" }}
-        />
+      <div className="wt-no-drag flex items-center gap-2 rounded-lg py-1 pl-2.5 pr-1" style={{ background: "var(--wt-panel)" }}>
+        <span className="inline-block rounded-full" style={{ width: 8, height: 8, background: stackUp ? "var(--wt-ok)" : "var(--wt-danger)" }} />
         <span className="text-xs font-medium">{stackUp ? "スタック稼働" : "スタック停止"}</span>
         {stackUp ? (
           <IconButton
             icon="stop_circle"
-            size={16}
+            size={15}
+            box={26}
             title="スタック停止（stop のみ）"
             onClick={async () => {
               if (await confirm("スタックを停止しますか？（stop のみ・DB は down しません）")) {
@@ -46,7 +76,8 @@ export function TopBar() {
         ) : (
           <IconButton
             icon="play_circle"
-            size={16}
+            size={15}
+            box={26}
             title="スタック起動"
             onClick={async () => {
               if (await confirm("スタックを起動しますか？（docker compose start）")) {
@@ -58,17 +89,14 @@ export function TopBar() {
       </div>
 
       {/* :3000 FE */}
-      <div className="wt-no-drag flex items-center gap-2 rounded-lg px-2.5 py-1.5" style={{ background: "var(--wt-panel)" }}>
-        <span className="text-xs font-medium" style={{ color: "var(--wt-info)" }}>
-          :{port}
-        </span>
-        <span className="text-xs" style={{ color: feColor }}>
-          {feLabel}
-        </span>
+      <div className="wt-no-drag flex items-center gap-2 rounded-lg py-1 pl-2.5 pr-1" style={{ background: "var(--wt-panel)" }}>
+        <span className="text-xs font-medium" style={{ color: "var(--wt-info)" }}>:{port}</span>
+        <span className="text-xs" style={{ color: feColor }}>{feLabel}</span>
         {mainFe.listening && (
           <IconButton
             icon="power_settings_new"
-            size={16}
+            size={15}
+            box={26}
             title={`:${port} の FE を停止`}
             onClick={async () => {
               if (await confirm(`:${port} のメイン FE を停止しますか？`)) {
@@ -107,12 +135,9 @@ export function TopBar() {
         >
           全戻す
         </Button>
-        <IconButton
-          icon="health_and_safety"
-          title="health（自動復旧）"
-          onClick={() => run("health", "health_check", {})}
-        />
+        <IconButton icon="health_and_safety" title="health（自動復旧）" onClick={() => run("health", "health_check", {})} />
         <IconButton icon="refresh" title="更新" onClick={() => void refresh()} />
+        <UpdateCheck />
         <IconButton
           icon={theme === "dark" ? "light_mode" : "dark_mode"}
           title="テーマ切替"

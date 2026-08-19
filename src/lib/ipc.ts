@@ -27,6 +27,8 @@ export const api = {
   isDirty: (path: string) => invoke<boolean>("is_dirty", { path }),
   migrationShow: (group: string, app: string) =>
     invoke<string>("migration_show", { group, app }),
+  containerLogs: (service: string, tail: number) =>
+    invoke<string>("container_logs", { service, tail }),
   rollbackTarget: (worktree: string, appdir: string, base: string | null) =>
     invoke<string>("rollback_target", { worktree, appdir, base }),
 };

@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::process::Command;
 
 use crate::domain::topology::PROJECT;
 use crate::error::WtResult;
@@ -148,6 +149,24 @@ impl Docker {
             cmd.push(t);
         }
         stream(&cmd, None, true, sink)
+    }
+
+    /// コンテナの直近ログ（stdout+stderr 結合）を末尾 tail 行ぶん返す。
+    pub fn logs(&self, service: &str, tail: u32) -> String {
+        let out = Command::new("docker")
+            .args(["logs", "--tail", &tail.to_string(), &self.container(service)])
+            .output();
+        match out {
+            Ok(o) => {
+                let mut s = String::from_utf8_lossy(&o.stdout).into_owned();
+                let err = String::from_utf8_lossy(&o.stderr);
+                if !err.trim().is_empty() {
+                    s.push_str(&err);
+                }
+                s
+            }
+            Err(e) => format!("docker logs の取得に失敗: {e}"),
+        }
     }
 
     pub fn showmigrations(&self, container: &str, app: &str) -> String {

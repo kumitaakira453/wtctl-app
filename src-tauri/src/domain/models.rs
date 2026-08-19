@@ -29,6 +29,7 @@ pub struct PrInfo {
     /// "draft" | "open" | "merged" | "closed"
     pub state: String,
     pub url: String,
+    pub title: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
