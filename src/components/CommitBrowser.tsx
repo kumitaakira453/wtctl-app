@@ -83,6 +83,29 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
     setCtxLines(DIFF_CONTEXT_LEVELS[0].v);
   };
 
+  // コミット列/ツリー列の合計が広がりすぎて diff が消える・右へはみ出すのを防ぐ。
+  // 実コンテナ幅から diff の最小幅を差し引いた範囲にドラッグをクランプする。
+  const rootRef = useRef<HTMLDivElement>(null);
+  const MIN_DIFF = 260;
+  const avail = () => rootRef.current?.clientWidth ?? 9999;
+  const resizeCommits = (dx: number) =>
+    setCommitsW((w) => clamp(w + dx, 150, Math.max(150, avail() - treeW - MIN_DIFF)));
+  const resizeTree = (dx: number) =>
+    setTreeW((w) => clamp(w + dx, 180, Math.max(180, avail() - commitsW - MIN_DIFF)));
+
+  // 初期表示・ウィンドウ/パネル変更で幅が過大なら収める
+  useEffect(() => {
+    const fit = () => {
+      const width = rootRef.current?.clientWidth;
+      if (!width) return;
+      setCommitsW((w) => clamp(w, 150, Math.max(150, width - 180 - MIN_DIFF)));
+      setTreeW((w) => clamp(w, 180, Math.max(180, width - 150 - MIN_DIFF)));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [setCommitsW, setTreeW]);
+
   useEffect(() => {
     let alive = true;
     setCommits(null);
@@ -152,7 +175,7 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
   const commitCount = commits.length - (dirty ? 1 : 0);
 
   return (
-    <div className="flex h-full min-h-0" style={{ borderTop: "1px solid var(--wt-border)" }}>
+    <div ref={rootRef} className="flex h-full min-h-0 min-w-0 overflow-hidden" style={{ borderTop: "1px solid var(--wt-border)" }}>
       {/* コミット一覧（可変幅） */}
       <div className="flex min-h-0 flex-col overflow-y-auto" style={{ width: commitsW, flexShrink: 0 }}>
         <ColHeader label={`コミット ${commitCount}`} />
@@ -185,7 +208,7 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
         })}
       </div>
 
-      <Resizer onResize={(dx) => setCommitsW((w) => clamp(w + dx, 150, 460))} />
+      <Resizer onResize={resizeCommits} />
 
       {/* 右領域: コミット詳細 + (ファイルツリー | diff) */}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -205,7 +228,7 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
           </div>
         )}
 
-        <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1">
           {/* ファイルツリー（可変幅） */}
           <div className="flex min-h-0 flex-col overflow-y-auto" style={{ width: treeW, flexShrink: 0 }}>
             <ColHeader label={files ? `ファイル ${files.length}` : "ファイル"} />
@@ -222,7 +245,7 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
             )}
           </div>
 
-          <Resizer onResize={(dx) => setTreeW((w) => clamp(w + dx, 180, 560))} />
+          <Resizer onResize={resizeTree} />
 
           {/* diff（残り全幅） */}
           <div className="flex min-w-0 flex-1 flex-col">
