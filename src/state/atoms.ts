@@ -47,6 +47,14 @@ export const stackCollapsedAtom = atomWithStorage<boolean>("wtctl.stackCollapsed
   getOnInit: true,
 });
 
+// 差分ビューアの各カラム幅（ドラッグで可変・永続化）
+export const browserCommitsWAtom = atomWithStorage<number>("wtctl.browser.commitsW", 210, undefined, {
+  getOnInit: true,
+});
+export const browserTreeWAtom = atomWithStorage<number>("wtctl.browser.treeW", 300, undefined, {
+  getOnInit: true,
+});
+
 export type PrFilter = "all" | "open" | "merged" | "closed" | "none";
 export const prFilterAtom = atom<PrFilter>("all");
 

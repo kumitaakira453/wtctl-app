@@ -83,6 +83,7 @@ export interface CommitInfo {
   subject: string;
   author: string;
   rel: string;
+  body: string;
 }
 
 export interface FileChange {

@@ -121,6 +121,7 @@ pub struct CommitInfo {
     pub subject: String,
     pub author: String,
     pub rel: String,
+    pub body: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

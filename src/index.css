@@ -170,3 +170,75 @@ body {
 .wt-no-drag {
   -webkit-app-region: no-drag;
 }
+
+/* ============================================================
+   シンタックスハイライト（highlight.js トークン）
+   diff の +/- 背景を活かすため hljs テーマ CSS は使わず自前定義。
+   ============================================================ */
+.hljs-diff .hljs-comment,
+.hljs-diff .hljs-quote {
+  color: var(--wt-hl-comment);
+  font-style: italic;
+}
+.hljs-diff .hljs-keyword,
+.hljs-diff .hljs-selector-tag,
+.hljs-diff .hljs-literal,
+.hljs-diff .hljs-doctag,
+.hljs-diff .hljs-name {
+  color: var(--wt-hl-keyword);
+}
+.hljs-diff .hljs-string,
+.hljs-diff .hljs-meta .hljs-string,
+.hljs-diff .hljs-regexp {
+  color: var(--wt-hl-string);
+}
+.hljs-diff .hljs-number,
+.hljs-diff .hljs-symbol,
+.hljs-diff .hljs-bullet {
+  color: var(--wt-hl-number);
+}
+.hljs-diff .hljs-title,
+.hljs-diff .hljs-title.function_,
+.hljs-diff .hljs-section {
+  color: var(--wt-hl-title);
+}
+.hljs-diff .hljs-title.class_,
+.hljs-diff .hljs-type,
+.hljs-diff .hljs-built_in,
+.hljs-diff .hljs-class .hljs-title {
+  color: var(--wt-hl-type);
+}
+.hljs-diff .hljs-attr,
+.hljs-diff .hljs-attribute,
+.hljs-diff .hljs-variable,
+.hljs-diff .hljs-template-variable,
+.hljs-diff .hljs-property {
+  color: var(--wt-hl-attr);
+}
+.hljs-diff .hljs-meta,
+.hljs-diff .hljs-params,
+.hljs-diff .hljs-selector-attr {
+  color: var(--wt-hl-meta);
+}
+
+:root,
+[data-theme="dark"] {
+  --wt-hl-comment: #8b949e;
+  --wt-hl-keyword: #ff7b72;
+  --wt-hl-string: #a5d6ff;
+  --wt-hl-number: #79c0ff;
+  --wt-hl-title: #d2a8ff;
+  --wt-hl-type: #ffa657;
+  --wt-hl-attr: #7ee787;
+  --wt-hl-meta: #79c0ff;
+}
+[data-theme="light"] {
+  --wt-hl-comment: #6a737d;
+  --wt-hl-keyword: #d73a49;
+  --wt-hl-string: #032f62;
+  --wt-hl-number: #005cc5;
+  --wt-hl-title: #6f42c1;
+  --wt-hl-type: #e36209;
+  --wt-hl-attr: #22863a;
+  --wt-hl-meta: #005cc5;
+}

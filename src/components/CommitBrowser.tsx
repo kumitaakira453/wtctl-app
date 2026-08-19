@@ -1,44 +1,74 @@
-import { useEffect, useState } from "react";
+import { useAtom } from "jotai";
+import { useEffect, useRef, useState } from "react";
+import { langForPath } from "../lib/highlight";
 import { api } from "../lib/ipc";
 import type { CommitInfo, FileChange } from "../lib/types";
+import { browserCommitsWAtom, browserTreeWAtom } from "../state/atoms";
 import { DiffView } from "./DiffView";
-import { Icon } from "./Icon";
+import { FileTree } from "./FileTree";
 import { Spinner } from "./ui";
-
-const STATUS_COLOR: Record<string, string> = {
-  A: "var(--wt-ok)",
-  M: "var(--wt-warn)",
-  D: "var(--wt-err)",
-  R: "var(--wt-info)",
-  C: "var(--wt-info)",
-  "?": "var(--wt-muted)",
-};
 
 const WORKING: CommitInfo = {
   sha: "WORKING",
-  shortSha: "変更",
+  shortSha: "working",
   subject: "未コミットの変更",
   author: "",
   rel: "作業ツリー",
+  body: "",
 };
 
 function basename(p: string): string {
   return p.split("/").pop() ?? p;
 }
-function dirname(p: string): string {
-  const i = p.lastIndexOf("/");
-  return i < 0 ? "" : p.slice(0, i + 1);
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+/// 縦のドラッグハンドル。onResize には前回からの増分 dx を渡す。
+function Resizer({ onResize }: { onResize: (dx: number) => void }) {
+  const last = useRef(0);
+  const onMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    last.current = e.clientX;
+    const onMove = (ev: MouseEvent) => {
+      onResize(ev.clientX - last.current);
+      last.current = ev.clientX;
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      className="group relative shrink-0 self-stretch"
+      style={{ width: 6, cursor: "col-resize" }}
+    >
+      <div
+        className="absolute inset-y-0 left-1/2 -translate-x-1/2 transition-colors group-hover:bg-[var(--wt-accent)]"
+        style={{ width: 1, background: "var(--wt-border)" }}
+      />
+    </div>
+  );
 }
 
-/// GitHub 風: コミット一覧 → 変更ファイル一覧 → 選択ファイルの diff。
+/// GitHub / ChatGPT デスクトップ風: コミット一覧 → コミット詳細 → ファイルツリー → 色付き diff。
+/// 各カラム幅はドラッグで可変（永続化）。
 export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean }) {
+  const [commitsW, setCommitsW] = useAtom(browserCommitsWAtom);
+  const [treeW, setTreeW] = useAtom(browserTreeWAtom);
   const [commits, setCommits] = useState<CommitInfo[] | null>(null);
   const [sha, setSha] = useState<string | null>(null);
   const [files, setFiles] = useState<FileChange[] | null>(null);
   const [file, setFile] = useState<string | null>(null);
   const [diff, setDiff] = useState<string | null>(null);
 
-  // コミット一覧（path 切替でリセット）
   useEffect(() => {
     let alive = true;
     setCommits(null);
@@ -57,7 +87,6 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
     };
   }, [path, dirty]);
 
-  // 選択コミットのファイル一覧
   useEffect(() => {
     if (!sha) return;
     let alive = true;
@@ -74,7 +103,6 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
     };
   }, [path, sha]);
 
-  // 選択ファイルの diff
   useEffect(() => {
     if (!sha || !file) {
       setDiff(file ? null : "");
@@ -105,14 +133,14 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
     );
   }
 
+  const current = commits.find((c) => c.sha === sha) ?? null;
+  const commitCount = commits.length - (dirty ? 1 : 0);
+
   return (
     <div className="flex h-full min-h-0" style={{ borderTop: "1px solid var(--wt-border)" }}>
-      {/* コミット一覧 */}
-      <div
-        className="flex w-[236px] shrink-0 flex-col overflow-y-auto"
-        style={{ borderRight: "1px solid var(--wt-border)" }}
-      >
-        <ColHeader label={`コミット ${commits.length - (dirty ? 1 : 0)}`} />
+      {/* コミット一覧（可変幅） */}
+      <div className="flex min-h-0 flex-col overflow-y-auto" style={{ width: commitsW, flexShrink: 0 }}>
+        <ColHeader label={`コミット ${commitCount}`} />
         {commits.map((c) => {
           const on = c.sha === sha;
           const working = c.sha === "WORKING";
@@ -126,10 +154,13 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
               onMouseEnter={(e) => !on && (e.currentTarget.style.background = "var(--wt-hover)")}
               onMouseLeave={(e) => !on && (e.currentTarget.style.background = "transparent")}
             >
-              <span className="truncate text-[12.5px] font-medium" style={{ color: working ? "var(--wt-warn)" : "var(--wt-fg)" }}>
+              <span
+                className="line-clamp-2 text-[12.5px] font-medium"
+                style={{ color: working ? "var(--wt-warn)" : "var(--wt-fg)" }}
+              >
                 {c.subject}
               </span>
-              <span className="flex items-center gap-1.5 text-[10.5px]" style={{ color: "var(--wt-muted)" }}>
+              <span className="flex items-center gap-1.5 truncate text-[10.5px]" style={{ color: "var(--wt-muted)" }}>
                 <span className="font-mono">{c.shortSha}</span>
                 {c.author && <span>· {c.author}</span>}
                 <span>· {c.rel}</span>
@@ -139,65 +170,58 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
         })}
       </div>
 
-      {/* ファイル一覧 */}
-      <div
-        className="flex w-[280px] shrink-0 flex-col overflow-y-auto"
-        style={{ borderRight: "1px solid var(--wt-border)" }}
-      >
-        <ColHeader label={files ? `ファイル ${files.length}` : "ファイル"} />
-        {files === null ? (
-          <div className="flex flex-1 items-center justify-center">
-            <Spinner size={16} />
-          </div>
-        ) : files.length === 0 ? (
-          <div className="px-3 py-3 text-[11.5px]" style={{ color: "var(--wt-muted)" }}>
-            変更ファイルなし
-          </div>
-        ) : (
-          files.map((f) => {
-            const on = f.path === file;
-            return (
-              <button
-                key={f.path}
-                type="button"
-                onClick={() => setFile(f.path)}
-                className="flex items-center gap-2 px-3 py-1.5 text-left transition-colors"
-                style={{ background: on ? "var(--wt-active)" : "transparent" }}
-                onMouseEnter={(e) => !on && (e.currentTarget.style.background = "var(--wt-hover)")}
-                onMouseLeave={(e) => !on && (e.currentTarget.style.background = "transparent")}
-                title={f.path}
-              >
-                <span
-                  className="grid h-4 w-4 shrink-0 place-items-center rounded text-[10px] font-bold"
-                  style={{ color: STATUS_COLOR[f.status] ?? "var(--wt-muted)" }}
-                >
-                  {f.status}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-[12px]">
-                  <span style={{ color: "var(--wt-muted)" }}>{dirname(f.path)}</span>
-                  <span style={{ color: "var(--wt-fg)" }}>{basename(f.path)}</span>
-                </span>
-                <span className="shrink-0 font-mono text-[10px]">
-                  {f.additions > 0 && <span style={{ color: "var(--wt-ok)" }}>+{f.additions}</span>}
-                  {f.deletions > 0 && <span className="ml-1" style={{ color: "var(--wt-err)" }}>-{f.deletions}</span>}
-                </span>
-              </button>
-            );
-          })
-        )}
-      </div>
+      <Resizer onResize={(dx) => setCommitsW((w) => clamp(w + dx, 150, 460))} />
 
-      {/* diff */}
+      {/* 右領域: コミット詳細 + (ファイルツリー | diff) */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <ColHeader label={file ? basename(file) : "差分"} mono={!!file} />
-        <div className="min-h-0 flex-1">
-          {diff === null ? (
-            <div className="flex h-full items-center justify-center">
-              <Spinner size={16} />
+        {current && current.sha !== "WORKING" && (
+          <div className="shrink-0 px-4 py-2.5" style={{ borderBottom: "1px solid var(--wt-border)", background: "var(--wt-panel)" }}>
+            <div className="text-[13px] font-semibold leading-snug">{current.subject}</div>
+            {current.body && (
+              <div className="mt-1 max-h-24 overflow-y-auto whitespace-pre-wrap text-[11.5px] leading-relaxed" style={{ color: "var(--wt-fg-dim)" }}>
+                {current.body}
+              </div>
+            )}
+            <div className="mt-1.5 flex items-center gap-2 text-[10.5px]" style={{ color: "var(--wt-muted)" }}>
+              <span className="font-mono">{current.shortSha}</span>
+              {current.author && <span>· {current.author}</span>}
+              <span>· {current.rel}</span>
             </div>
-          ) : (
-            <DiffView diff={diff} />
-          )}
+          </div>
+        )}
+
+        <div className="flex min-h-0 flex-1">
+          {/* ファイルツリー（可変幅） */}
+          <div className="flex min-h-0 flex-col overflow-y-auto" style={{ width: treeW, flexShrink: 0 }}>
+            <ColHeader label={files ? `ファイル ${files.length}` : "ファイル"} />
+            {files === null ? (
+              <div className="flex flex-1 items-center justify-center">
+                <Spinner size={16} />
+              </div>
+            ) : files.length === 0 ? (
+              <div className="px-3 py-3 text-[11.5px]" style={{ color: "var(--wt-muted)" }}>
+                変更ファイルなし
+              </div>
+            ) : (
+              <FileTree files={files} selected={file} onSelect={setFile} />
+            )}
+          </div>
+
+          <Resizer onResize={(dx) => setTreeW((w) => clamp(w + dx, 180, 560))} />
+
+          {/* diff（残り全幅） */}
+          <div className="flex min-w-0 flex-1 flex-col">
+            <ColHeader label={file ? basename(file) : "差分"} mono={!!file} />
+            <div className="min-h-0 flex-1">
+              {diff === null ? (
+                <div className="flex h-full items-center justify-center">
+                  <Spinner size={16} />
+                </div>
+              ) : (
+                <DiffView diff={diff} lang={file ? langForPath(file) : null} />
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -210,7 +234,6 @@ function ColHeader({ label, mono }: { label: string; mono?: boolean }) {
       className="sticky top-0 z-10 flex items-center gap-1.5 px-3 py-1.5"
       style={{ background: "var(--wt-bg)", borderBottom: "1px solid var(--wt-border)" }}
     >
-      <Icon name="commit" size={13} style={{ color: "var(--wt-muted)", display: "none" }} />
       <span
         className={`truncate text-[11px] font-semibold uppercase tracking-wide ${mono ? "font-mono normal-case" : ""}`}
         style={{ color: "var(--wt-muted)" }}

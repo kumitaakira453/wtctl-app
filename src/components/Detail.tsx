@@ -99,16 +99,6 @@ export function Detail() {
     }
   };
 
-  const planSummary = () => {
-    if (!plan) return "…";
-    if (plan.error) return "detect error";
-    const parts: string[] = [];
-    if (plan.groups.length) parts.push(`BE: ${plan.groups.join(", ")}`);
-    if (plan.fe) parts.push("FE");
-    if (plan.migrations.length) parts.push(`migration ×${plan.migrations.length}`);
-    return parts.length ? parts.join(" ・ ") : "変更なし";
-  };
-
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* ヘッダ + 操作（固定・非スクロール） */}
@@ -171,9 +161,9 @@ export function Detail() {
         <Button variant="primary" icon="play_arrow" onClick={openScheme}>
           検証
         </Button>
-        <span className="text-[12px]" style={{ color: "var(--wt-muted)" }}>
-          {planSummary()}
-        </span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <PlanChips plan={plan} />
+        </div>
         <div className="relative ml-auto" ref={menuRef}>
           <button
             type="button"
@@ -223,6 +213,40 @@ export function Detail() {
 
       {scheme && <VerifyScheme worktree={wt} plan={scheme} onClose={() => setScheme(null)} />}
     </div>
+  );
+}
+
+/// 検証対象（BE グループ / FE / migration）を色分けラベルで示す。
+function PlanChips({ plan }: { plan: VerifyPlan | undefined }) {
+  if (!plan) {
+    return <span className="text-[12px]" style={{ color: "var(--wt-muted)" }}>…</span>;
+  }
+  if (plan.error) {
+    return <Badge color="var(--wt-danger)" soft>検出エラー</Badge>;
+  }
+  const empty = plan.groups.length === 0 && !plan.fe && plan.migrations.length === 0;
+  if (empty) {
+    return <span className="text-[12px]" style={{ color: "var(--wt-muted)" }}>変更なし</span>;
+  }
+  return (
+    <>
+      {plan.groups.map((g) => (
+        <Badge key={g} color="var(--wt-warn)" soft>
+          BE {g}
+          {plan.buildGroups.includes(g) ? " +build" : ""}
+        </Badge>
+      ))}
+      {plan.fe && (
+        <Badge color="var(--wt-info)" soft>
+          FE
+        </Badge>
+      )}
+      {plan.migrations.length > 0 && (
+        <Badge color="var(--wt-ok)" soft>
+          migration ×{plan.migrations.length}
+        </Badge>
+      )}
+    </>
   );
 }
 

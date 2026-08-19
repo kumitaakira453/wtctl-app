@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { highlightLine } from "../lib/highlight";
 
 type Row = {
   kind: "add" | "del" | "ctx" | "hunk" | "meta";
@@ -47,7 +48,6 @@ function parse(diff: string): Row[] {
       rows.push({ kind: "ctx", text: line.replace(/^ /, ""), oldNo: oldNo++, newNo: newNo++ });
     }
   }
-  // 末尾の空行を除去
   while (rows.length && rows[rows.length - 1].text === "" && rows[rows.length - 1].kind === "ctx") {
     rows.pop();
   }
@@ -55,25 +55,31 @@ function parse(diff: string): Row[] {
 }
 
 const BG: Record<Row["kind"], string> = {
-  add: "var(--wt-diff-add, rgba(46,160,67,0.15))",
-  del: "var(--wt-diff-del, rgba(248,81,73,0.15))",
+  add: "var(--wt-diff-add)",
+  del: "var(--wt-diff-del)",
   ctx: "transparent",
   hunk: "var(--wt-hover)",
   meta: "transparent",
 };
 
-const FG: Record<Row["kind"], string> = {
+const SIGN: Record<Row["kind"], string> = { add: "+", del: "-", ctx: " ", hunk: "", meta: "" };
+const SIGN_COLOR: Record<Row["kind"], string> = {
   add: "var(--wt-ok)",
-  del: "var(--wt-err, #f85149)",
-  ctx: "var(--wt-fg-dim)",
+  del: "var(--wt-err)",
+  ctx: "var(--wt-muted)",
   hunk: "var(--wt-muted)",
   meta: "var(--wt-muted)",
 };
 
-const SIGN: Record<Row["kind"], string> = { add: "+", del: "-", ctx: " ", hunk: "", meta: "" };
-
-export function DiffView({ diff }: { diff: string }) {
+export function DiffView({ diff, lang }: { diff: string; lang: string | null }) {
   const rows = useMemo(() => parse(diff), [diff]);
+  const highlighted = useMemo(
+    () =>
+      rows.map((r) =>
+        r.kind === "hunk" || r.kind === "meta" ? escapeHtml(r.text) : highlightLine(r.text, lang),
+      ),
+    [rows, lang],
+  );
 
   if (!diff.trim()) {
     return (
@@ -84,36 +90,39 @@ export function DiffView({ diff }: { diff: string }) {
   }
 
   return (
-    <div className="h-full overflow-auto font-mono text-[11.5px] leading-[1.6]">
+    <div className="hljs-diff h-full overflow-auto font-mono text-[11.5px] leading-[1.6]">
       <table className="w-full border-collapse" style={{ tableLayout: "auto" }}>
         <tbody>
           {rows.map((r, i) => (
             <tr key={i} style={{ background: BG[r.kind] }}>
               <td
                 className="select-none px-2 text-right align-top"
-                style={{ color: "var(--wt-muted)", width: 44, minWidth: 44, opacity: 0.6 }}
+                style={{ color: "var(--wt-muted)", width: 44, minWidth: 44, opacity: 0.55 }}
               >
                 {r.oldNo ?? ""}
               </td>
               <td
                 className="select-none px-2 text-right align-top"
-                style={{ color: "var(--wt-muted)", width: 44, minWidth: 44, opacity: 0.6 }}
+                style={{ color: "var(--wt-muted)", width: 44, minWidth: 44, opacity: 0.55 }}
               >
                 {r.newNo ?? ""}
               </td>
-              <td
-                className="select-none px-1 text-center align-top"
-                style={{ color: FG[r.kind], width: 16 }}
-              >
+              <td className="select-none px-1 text-center align-top" style={{ color: SIGN_COLOR[r.kind], width: 16 }}>
                 {SIGN[r.kind]}
               </td>
-              <td className="whitespace-pre-wrap break-all pr-3 align-top" style={{ color: FG[r.kind] }}>
-                {r.text || " "}
-              </td>
+              <td
+                className="whitespace-pre-wrap break-all pr-3 align-top"
+                style={{ color: r.kind === "hunk" || r.kind === "meta" ? "var(--wt-muted)" : "var(--wt-fg-dim)" }}
+                dangerouslySetInnerHTML={{ __html: highlighted[i] || " " }}
+              />
             </tr>
           ))}
         </tbody>
       </table>
     </div>
   );
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

@@ -269,18 +269,20 @@ impl Git {
     }
 
     /// base..HEAD のコミット一覧（新しい順）。base 未検出時は直近 30 件。
+    /// -z でコミット間を NUL 区切りにし、本文（%b）の改行に対応する。
     pub fn commit_log(&self, worktree: &str) -> Vec<crate::domain::models::CommitInfo> {
-        let fmt = format!("--format=%H{S}%h{S}%s{S}%an{S}%cr", S = MIGRATION_SEP);
+        let fmt = format!("--format=%H{S}%h{S}%s{S}%an{S}%cr{S}%b", S = MIGRATION_SEP);
         let range = self.merge_base(worktree).map(|b| format!("{b}..HEAD"));
-        let mut args: Vec<&str> = vec!["git", "-C", worktree, "log", &fmt];
+        let mut args: Vec<&str> = vec!["git", "-C", worktree, "log", "-z", &fmt];
         match &range {
             Some(r) => args.push(r),
             None => args.push("-30"),
         }
         let out = capture(&args, None, false).unwrap_or_default();
-        out.lines()
-            .filter_map(|line| {
-                let p: Vec<&str> = line.split(MIGRATION_SEP).collect();
+        out.split('\0')
+            .filter(|r| !r.trim().is_empty())
+            .filter_map(|rec| {
+                let p: Vec<&str> = rec.splitn(6, MIGRATION_SEP).collect();
                 if p.len() < 5 {
                     return None;
                 }
@@ -290,6 +292,7 @@ impl Git {
                     subject: p[2].to_string(),
                     author: p[3].to_string(),
                     rel: p[4].to_string(),
+                    body: p.get(5).unwrap_or(&"").trim().to_string(),
                 })
             })
             .collect()
