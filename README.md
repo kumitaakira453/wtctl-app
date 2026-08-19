@@ -60,7 +60,20 @@ flowchart LR
 
 ---
 
-## セットアップ
+## インストール（使う人向け）
+
+1. [Releases](https://github.com/kumitaakira453/wtctl-app/releases) から最新版の **`.dmg`**（macOS Apple Silicon）をダウンロード。
+2. `.dmg` を開き、`wtctl.app` を `Applications` にドラッグ。
+3. 初回起動は **未署名アプリ**のため Gatekeeper に止められる。次のいずれかで開く:
+   - `wtctl.app` を右クリック →「開く」→「開く」
+   - または `xattr -dr com.apple.quarantine /Applications/wtctl.app` を実行してから起動
+4. 起動後、初回のみ wasurenai リポジトリの場所を設定（[設定](#設定)）。
+
+> リリースは v タグの push で作られる（[リリース](#リリース) 参照）。まだ Assets が無い場合は下記のビルドで自分用の `.dmg` を作れる。
+
+---
+
+## 開発（コントリビュータ向け）
 
 ### 前提
 
@@ -79,6 +92,7 @@ npm run tauri:dev
 
 ```bash
 npm run tauri:build
+# 生成物: src-tauri/target/release/bundle/dmg/*.dmg
 ```
 
 ---
@@ -103,6 +117,20 @@ npm run tauri:build
 - `worktree_dir`（任意）: worktree 作成先。相対パスは repo 起点。既定は `<repo>/.claude/worktrees`
 
 > 設定・状態は TUI 版 `wtctl` と同じ場所を共有する。どちらから操作しても差し替え状態は一貫する。
+
+---
+
+## リリース
+
+`v*` タグを push すると GitHub Actions（[`release.yml`](.github/workflows/release.yml)）が macOS (Apple Silicon) をビルドし、`.dmg` を添付した **Draft Release** を作る。
+
+```bash
+# 例: v0.1.0 をリリース（tauri.conf.json / package.json の version を合わせておく）
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+ビルド完了後、[Releases](https://github.com/kumitaakira453/wtctl-app/releases) でドラフトを確認し、公開すると `.dmg` がダウンロード可能になる。コード署名・公証（notarization）は未設定のため、利用者側で初回に Gatekeeper の回避が必要（[インストール](#インストール使う人向け) 参照）。
 
 ---
 
