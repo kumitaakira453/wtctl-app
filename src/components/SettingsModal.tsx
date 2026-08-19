@@ -45,24 +45,32 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const field = (
+  const pathRow = (
     label: string,
     value: string,
-    setter: (v: string) => void,
     placeholder: string,
+    setter: (v: string) => void,
+    clearable: boolean,
   ) => (
     <div className="mb-4">
       <div className="mb-1.5 text-xs font-semibold" style={{ color: "var(--wt-muted)" }}>
         {label}
       </div>
       <div className="flex gap-2">
-        <input
-          value={value}
-          onChange={(e) => setter(e.target.value)}
-          placeholder={placeholder}
-          className="w-full rounded-lg px-3 py-2 font-mono text-[12px] outline-none"
-          style={{ background: "var(--wt-panel)", border: "1px solid var(--wt-border-strong)", color: "var(--wt-fg)" }}
-        />
+        <div
+          className="flex min-w-0 flex-1 items-center rounded-lg px-3 font-mono text-[12px]"
+          style={{
+            background: "var(--wt-panel)",
+            border: "1px solid var(--wt-border-strong)",
+            color: value ? "var(--wt-fg)" : "var(--wt-muted)",
+            minHeight: 38,
+          }}
+        >
+          <span className="truncate">{value || placeholder}</span>
+        </div>
+        {clearable && value && (
+          <Button icon="close" variant="ghost" onClick={() => setter("")} title="既定に戻す" />
+        )}
         <Button icon="folder_open" variant="default" onClick={() => pick(setter)} title="フォルダを選択">
           参照
         </Button>
@@ -72,12 +80,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title="設定" onClose={onClose} width={620}>
-      {field("wasurenai リポジトリ（必須）", repo, setRepo, "/absolute/path/to/wasurenai")}
-      {field(
+      {pathRow("wasurenai リポジトリ（必須）", repo, "未選択", setRepo, false)}
+      {pathRow(
         "worktree 作成先（任意・既定は <repo>/.claude/worktrees）",
         worktreeDir,
+        ".claude/worktrees（既定）",
         setWorktreeDir,
-        ".claude/worktrees",
+        true,
       )}
 
       {error && (

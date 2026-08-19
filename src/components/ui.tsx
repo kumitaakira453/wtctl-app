@@ -34,7 +34,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className="wt-no-drag inline-flex items-center gap-1.5 rounded-lg border font-medium transition-colors"
+      className="wt-no-drag inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border font-medium transition-colors"
       style={{
         ...VARIANT_STYLE[variant],
         padding: size === "sm" ? "4px 9px" : "7px 13px",
