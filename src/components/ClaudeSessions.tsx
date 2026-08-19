@@ -107,21 +107,22 @@ export function ClaudeSessions({ path }: { path: string }) {
   const [sessions, setSessions] = useState<ClaudeSession[] | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<ClaudeMessage[] | null>(null);
+  // 手動再読み込み用。ライブ追尾はしないので進行中セッションはこれで取り直す。
+  const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
     let alive = true;
     setSessions(null);
-    setActive(null);
     setMsgs(null);
     api.claudeSessions(path).then((s) => {
       if (!alive) return;
       setSessions(s);
-      setActive(s[0]?.id ?? null);
+      setActive((prev) => (prev && s.some((x) => x.id === prev) ? prev : (s[0]?.id ?? null)));
     });
     return () => {
       alive = false;
     };
-  }, [path]);
+  }, [path, nonce]);
 
   useEffect(() => {
     if (!active) return;
@@ -133,7 +134,7 @@ export function ClaudeSessions({ path }: { path: string }) {
     return () => {
       alive = false;
     };
-  }, [path, active]);
+  }, [path, active, nonce]);
 
   const current = useMemo(() => sessions?.find((s) => s.id === active) ?? null, [sessions, active]);
 
@@ -187,14 +188,27 @@ export function ClaudeSessions({ path }: { path: string }) {
       {/* 会話ビュー */}
       <div className="flex min-w-0 flex-1 flex-col">
         {current && (
-          <div className="shrink-0 px-4 py-2" style={{ borderBottom: "1px solid var(--wt-border)", background: "var(--wt-panel)" }}>
-            <div className="truncate text-[13px] font-semibold">{current.title}</div>
-            <div className="mt-0.5 flex items-center gap-2 text-[10.5px]" style={{ color: "var(--wt-muted)" }}>
-              <span className="font-mono">{current.id.slice(0, 8)}</span>
-              {current.branch && <span>· {current.branch}</span>}
-              <span>· {relTime(current.started)} 〜 {relTime(current.lastActive)}</span>
-              <span className="rounded px-1.5" style={{ border: "1px solid var(--wt-border)" }}>read-only</span>
+          <div className="flex shrink-0 items-center gap-3 px-4 py-2" style={{ borderBottom: "1px solid var(--wt-border)", background: "var(--wt-panel)" }}>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-semibold">{current.title}</div>
+              <div className="mt-0.5 flex items-center gap-2 text-[10.5px]" style={{ color: "var(--wt-muted)" }}>
+                <span className="font-mono">{current.id.slice(0, 8)}</span>
+                {current.branch && <span>· {current.branch}</span>}
+                <span>· {relTime(current.started)} 〜 {relTime(current.lastActive)}</span>
+                <span className="rounded px-1.5" style={{ border: "1px solid var(--wt-border)" }}>read-only</span>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={() => setNonce((n) => n + 1)}
+              title="セッションを再読み込み（進行中の会話の新着を取得）"
+              className="shrink-0 rounded-md p-1.5 transition-colors"
+              style={{ color: "var(--wt-muted)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--wt-fg)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--wt-muted)")}
+            >
+              <Icon name="refresh" size={16} />
+            </button>
           </div>
         )}
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">

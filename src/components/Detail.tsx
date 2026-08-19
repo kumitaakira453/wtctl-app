@@ -1,5 +1,5 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { useConfirm } from "../hooks/useConfirm";
 import { api } from "../lib/ipc";
@@ -7,6 +7,7 @@ import { feActiveFor, formatSize, PR_COLOR, samePath } from "../lib/status";
 import type { VerifyPlan } from "../lib/types";
 import { useApp } from "../state/app";
 import {
+  detailTabAtom,
   disksAtom,
   metasAtom,
   mountsAtom,
@@ -36,7 +37,7 @@ export function Detail() {
   const setWorktrees = useSetAtom(worktreesAtom);
   const setSelected = useSetAtom(selectedPathAtom);
   const [scheme, setScheme] = useState<VerifyPlan | null>(null);
-  const [tab, setTab] = useState<"diff" | "claude">("diff");
+  const [tab, setTab] = useAtom(detailTabAtom);
   const [menu, setMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 

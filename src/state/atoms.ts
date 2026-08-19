@@ -37,7 +37,13 @@ export const metasAtom = atom<Record<string, MetaEntry>>({});
 export const prsAtom = atom<Record<string, PrInfo>>({});
 export const disksAtom = atom<Record<string, number>>({});
 
-export const selectedPathAtom = atom<string | null>(null);
+// 最後に選択した worktree とタブは再起動後も保持する
+export const selectedPathAtom = atomWithStorage<string | null>("wtctl.selectedPath", null, undefined, {
+  getOnInit: true,
+});
+export const detailTabAtom = atomWithStorage<"diff" | "claude">("wtctl.detailTab", "diff", undefined, {
+  getOnInit: true,
+});
 export const sortModeAtom = atomWithStorage<SortMode>("wtctl.sortMode", "recent", undefined, {
   getOnInit: true,
 });

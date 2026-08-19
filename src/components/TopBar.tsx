@@ -141,7 +141,7 @@ export function TopBar() {
           >
             <span className="inline-block rounded-full" style={{ width: 8, height: 8, background: stackUp ? "var(--wt-ok)" : "var(--wt-muted)" }} />
             <Icon name="dns" size={15} style={{ color: "var(--wt-muted)" }} />
-            <span className="text-xs font-medium">スタック</span>
+            <span className="text-xs font-medium">BE</span>
             <Icon name="expand_more" size={14} style={{ color: "var(--wt-muted)", opacity: 0.6 }} />
           </button>
           <StackToggle up={stackUp} onStart={() => run("スタック起動", "stack_start", {})} onStop={async () => {
@@ -164,7 +164,7 @@ export function TopBar() {
       <div className="wt-no-drag flex h-[34px] items-center gap-1.5 rounded-lg pl-2 pr-1" style={{ background: "var(--wt-panel)" }}>
         <span className="inline-block rounded-full" style={{ width: 8, height: 8, background: feColor }} />
         <Icon name="language" size={15} style={{ color: "var(--wt-muted)" }} />
-        <span className="text-xs font-medium" style={{ color: "var(--wt-info)" }}>:{port}</span>
+        <span className="text-xs font-medium">FE</span>
         <span className="text-[10px]" style={{ color: feColor }}>{feLabel}</span>
         <StackToggle
           up={mainFe.listening}
