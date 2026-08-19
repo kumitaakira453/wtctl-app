@@ -3,6 +3,8 @@ import { beActiveFor, feActiveFor, PR_COLOR } from "../lib/status";
 import type { WorktreeEntry } from "../lib/types";
 import { useApp } from "../state/app";
 import {
+  mainFeAtom,
+  mainFePortAtom,
   metasAtom,
   mountsAtom,
   type PrFilter,
@@ -26,6 +28,8 @@ export function Sidebar({ onNew, onSettings }: { onNew: () => void; onSettings: 
   const metas = useAtomValue(metasAtom);
   const mounts = useAtomValue(mountsAtom);
   const vites = useAtomValue(vitesAtom);
+  const mainFe = useAtomValue(mainFeAtom);
+  const mainFePort = useAtomValue(mainFePortAtom);
   const prs = useAtomValue(prsAtom);
   const { ensureDisk } = useApp();
 
@@ -105,8 +109,13 @@ export function Sidebar({ onNew, onSettings }: { onNew: () => void; onSettings: 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
         {worktrees.map((w) => {
           const meta = metas[w.path]?.meta;
-          const active = beActiveFor(w.path, mounts);
-          const fe = feActiveFor(w.path, vites);
+          // main は state=main で稼働するため worktree 判定に載らない。main 用の判定を分ける。
+          const active = w.isMain
+            ? mounts.some((m) => m.state === "main")
+            : beActiveFor(w.path, mounts);
+          const fe = w.isMain
+            ? mainFe.listening && !vites.some((v) => v.port === mainFePort)
+            : feActiveFor(w.path, vites);
           const pr = w.branch ? prs[w.branch] : undefined;
           const isSel = selected === w.path;
           return (

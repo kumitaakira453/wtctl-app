@@ -65,13 +65,19 @@ export default function App() {
           ) : (
             <>
               <Sidebar onNew={() => setBranchOpen(true)} onSettings={() => setSettingsOpen(true)} />
-              <div className="relative flex min-w-0 flex-1 flex-col">
+              <div className="flex min-w-0 flex-1 flex-col">
                 <TopBar />
-                <div className="min-h-0 flex-1">
-                  <Detail />
+                <div className="flex min-h-0 flex-1">
+                  {/* 中央: 選択 worktree の詳細。ログドロワーはこの領域の下部だけを覆う */}
+                  <div className="relative flex min-w-0 flex-1 flex-col">
+                    <div className="min-h-0 flex-1">
+                      <Detail />
+                    </div>
+                    <LogDrawer />
+                  </div>
+                  {/* 右: 共通スタック（常設・ログに隠れない） */}
+                  <StackPanel />
                 </div>
-                <StackPanel />
-                <LogDrawer />
               </div>
             </>
           )}
