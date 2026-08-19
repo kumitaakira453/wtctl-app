@@ -1,4 +1,5 @@
-# wtctl-app
+<p align="center"><img src="docs/logo.png" width="128" alt="wtctl"></p>
+<h1 align="center">wtctl-app</h1>
 
 **wasurenai の git worktree を、メインチェックアウトを一切動かさずに Docker スタックへ差し替えて動作確認する**デスクトップアプリ。[wtctl](../wtctl)（ターミナル TUI）の GUI 版で、リアルタイムなログ表示・GUI 上の設定・ChatGPT ライクな操作感を提供する。
 
