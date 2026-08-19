@@ -144,6 +144,18 @@ body {
 .wt-fade {
   animation: wt-fade 0.14s ease-out;
 }
+@keyframes wt-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+.wt-pulse {
+  animation: wt-pulse 1.4s ease-in-out infinite;
+}
 
 /* タイトルバー（macOS overlay）用のドラッグ領域 */
 .wt-drag {

@@ -1,12 +1,12 @@
 [package]
 name = "app"
-version = "0.1.6"
+version = "0.1.7"
 description = "wtctl desktop app"
 authors = ["Kumita Akira"]
 license = ""
 repository = ""
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.80"
 
 [lib]
 name = "app_lib"

@@ -1,55 +1,65 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { stripAnsi } from "../lib/ansi";
-import { api, errorMessage } from "../lib/ipc";
+import { api, startContainerLogs } from "../lib/ipc";
 import { KNOWN_SERVICES } from "../lib/topology";
-import { Icon } from "./Icon";
-import { IconButton, Modal, Spinner } from "./ui";
+import { Modal } from "./ui";
 
-const POLL_MS = 1500;
 const TAIL = 500;
+const MAX_LINES = 4000;
 
-/// コンテナ docker logs をタブで切り替え、アクティブなタブをライブ追尾（ポーリング）する。
+/// docker logs -f をタブごとに購読し、行を逐次表示する（lazydocker 相当のストリーミング）。
 export function LogsModal({ initial, onClose }: { initial: string; onClose: () => void }) {
   const [active, setActive] = useState(initial);
-  const [text, setText] = useState<string | null>(null);
-  const [follow, setFollow] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [lines, setLines] = useState<string[]>([]);
+  const idRef = useRef<number | null>(null);
+  const bufRef = useRef<string[]>([]);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const atBottomRef = useRef(true);
 
-  const load = useCallback(async (service: string) => {
-    setLoading(true);
-    try {
-      setText(await api.containerLogs(service, TAIL));
-    } catch (e) {
-      setText(errorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // タブ切替時に即読込
   useEffect(() => {
-    setText(null);
-    void load(active);
-  }, [active, load]);
+    let cancelled = false;
+    bufRef.current = [];
+    setLines([]);
+    atBottomRef.current = true;
+    startContainerLogs(active, TAIL, (text) => bufRef.current.push(text))
+      .then((id) => {
+        if (cancelled) void api.stopContainerLogs(id);
+        else idRef.current = id;
+      })
+      .catch(() => {});
+    // バッファを間引いて反映（描画ストーム防止）
+    const flush = setInterval(() => {
+      if (bufRef.current.length === 0) return;
+      setLines((prev) => {
+        const next = prev.concat(bufRef.current);
+        bufRef.current = [];
+        return next.length > MAX_LINES ? next.slice(next.length - MAX_LINES) : next;
+      });
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearInterval(flush);
+      if (idRef.current != null) {
+        void api.stopContainerLogs(idRef.current);
+        idRef.current = null;
+      }
+    };
+  }, [active]);
 
-  // 追尾中は定期的に再取得
+  // 末尾付近にいるときだけ自動スクロール（上に遡って読んでいる間はジャンプしない）
   useEffect(() => {
-    if (!follow) return;
-    const id = setInterval(() => void load(active), POLL_MS);
-    return () => clearInterval(id);
-  }, [follow, active, load]);
-
-  // 追尾中は末尾へ自動スクロール
-  useEffect(() => {
-    if (!follow) return;
+    if (!atBottomRef.current) return;
     const el = bodyRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [text, follow]);
+  }, [lines]);
+
+  const onScroll = () => {
+    const el = bodyRef.current;
+    if (el) atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+  };
 
   return (
     <Modal title="コンテナ ログ" onClose={onClose} width={880}>
-      {/* タブ */}
       <div className="mb-2 flex flex-wrap items-center gap-1">
         {KNOWN_SERVICES.map((svc) => {
           const on = svc === active;
@@ -65,42 +75,26 @@ export function LogsModal({ initial, onClose }: { initial: string; onClose: () =
             </button>
           );
         })}
-        <div className="ml-auto flex items-center gap-1">
-          {loading && <Spinner size={12} />}
-          <button
-            type="button"
-            onClick={() => setFollow((v) => !v)}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium"
-            style={{
-              color: follow ? "var(--wt-accent)" : "var(--wt-muted)",
-              border: `1px solid ${follow ? "var(--wt-accent)" : "var(--wt-border)"}`,
-            }}
-            title="ライブ追尾"
-          >
-            <Icon name={follow ? "pause" : "play_arrow"} size={13} />
-            {follow ? "追尾中" : "停止中"}
-          </button>
-          <IconButton icon="refresh" onClick={() => void load(active)} title="更新" size={16} />
-        </div>
+        <span className="ml-auto flex items-center gap-1.5 text-[11px]" style={{ color: "var(--wt-ok)" }}>
+          <span className="wt-pulse inline-block rounded-full" style={{ width: 7, height: 7, background: "var(--wt-ok)" }} />
+          live
+        </span>
       </div>
 
       <div
         ref={bodyRef}
+        onScroll={onScroll}
         className="h-[58vh] overflow-auto rounded-lg p-3"
         style={{ background: "var(--wt-bg)", border: "1px solid var(--wt-border)" }}
       >
-        {text === null ? (
-          <div className="flex items-center gap-2 text-sm" style={{ color: "var(--wt-muted)" }}>
-            <Spinner size={13} /> 取得中…
+        {lines.length === 0 ? (
+          <div className="log-line" style={{ color: "var(--wt-muted)" }}>
+            接続中…（コンテナ未起動ならログはありません）
           </div>
-        ) : text.trim() ? (
-          <pre className="log-line" style={{ color: "var(--wt-fg-dim)" }}>
-            {stripAnsi(text)}
-          </pre>
         ) : (
-          <div className="flex items-center gap-2 text-sm" style={{ color: "var(--wt-muted)" }}>
-            <Icon name="inbox" size={16} /> ログがありません（コンテナ未起動の可能性）
-          </div>
+          <pre className="log-line" style={{ color: "var(--wt-fg-dim)" }}>
+            {lines.map((l) => stripAnsi(l)).join("\n")}
+          </pre>
         )}
       </div>
     </Modal>

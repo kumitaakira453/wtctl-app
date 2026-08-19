@@ -4,6 +4,10 @@
 //! git/docker/gh はブロッキングなので spawn_blocking でワーカースレッドに逃がす。
 
 use std::collections::HashMap;
+use std::io::{BufRead, BufReader};
+use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{LazyLock, Mutex};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -12,9 +16,14 @@ use tauri::ipc::Channel;
 use crate::app::ctx::Ctx;
 use crate::app::{health, migration, query, restore, stack, teardown, verify, worktree};
 use crate::domain::models::{BranchInfo, PrInfo, VerifyPlan};
+use crate::domain::topology::PROJECT;
 use crate::error::{WtError, WtResult};
 use crate::event::{LogEvent, Sink};
 use crate::infra::config;
+
+/// 実行中の `docker logs -f` プロセス（id -> Child）。タブ切替/閉じるで kill する。
+static LOG_PROCS: LazyLock<Mutex<HashMap<u64, Child>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static LOG_ID: AtomicU64 = AtomicU64::new(1);
 
 // ---------------------------------------------------------------- 実行ヘルパ
 
@@ -170,9 +179,46 @@ pub async fn migration_show(group: String, app: String) -> Result<String, WtErro
     run_query(move |ctx| migration::show(ctx, &group, &app)).await
 }
 
+/// `docker logs -f` を起動して行を Channel へストリームする（lazydocker 相当）。stream id を返す。
 #[tauri::command]
-pub async fn container_logs(service: String, tail: u32) -> Result<String, WtError> {
-    run_query(move |ctx| Ok(ctx.docker.logs(&service, tail))).await
+pub fn start_container_logs(service: String, tail: u32, channel: Channel<LogEvent>) -> Result<u64, WtError> {
+    let container = format!("{PROJECT}-{service}-1");
+    let mut child = Command::new("docker")
+        .args(["logs", "-f", "--tail", &tail.to_string(), &container])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| WtError::new(format!("docker logs の起動に失敗: {e}")))?;
+    let mut pipes: Vec<Box<dyn std::io::Read + Send>> = Vec::new();
+    if let Some(o) = child.stdout.take() {
+        pipes.push(Box::new(o));
+    }
+    if let Some(e) = child.stderr.take() {
+        pipes.push(Box::new(e));
+    }
+    let id = LOG_ID.fetch_add(1, Ordering::SeqCst);
+    LOG_PROCS.lock().unwrap().insert(id, child);
+
+    for p in pipes {
+        let ch = channel.clone();
+        std::thread::spawn(move || {
+            for line in BufReader::new(p).lines().map_while(Result::ok) {
+                if ch.send(LogEvent::out(line)).is_err() {
+                    break;
+                }
+            }
+        });
+    }
+    Ok(id)
+}
+
+/// ストリームを停止して docker logs プロセスを kill する。
+#[tauri::command]
+pub fn stop_container_logs(id: u64) {
+    if let Some(mut child) = LOG_PROCS.lock().unwrap().remove(&id) {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
 }
 
 // ---------------------------------------------------------------- アクション

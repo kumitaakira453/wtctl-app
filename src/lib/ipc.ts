@@ -27,8 +27,7 @@ export const api = {
   isDirty: (path: string) => invoke<boolean>("is_dirty", { path }),
   migrationShow: (group: string, app: string) =>
     invoke<string>("migration_show", { group, app }),
-  containerLogs: (service: string, tail: number) =>
-    invoke<string>("container_logs", { service, tail }),
+  stopContainerLogs: (id: number) => invoke<void>("stop_container_logs", { id }),
   rollbackTarget: (worktree: string, appdir: string, base: string | null) =>
     invoke<string>("rollback_target", { worktree, appdir, base }),
 };
@@ -42,6 +41,17 @@ export function runAction(
   const channel = new Channel<LogEvent>();
   channel.onmessage = onLog;
   return invoke<void>(cmd, { ...args, channel });
+}
+
+/// docker logs -f を開始し、行ごとに onLine を呼ぶ。停止用の stream id を返す。
+export function startContainerLogs(
+  service: string,
+  tail: number,
+  onLine: (text: string) => void,
+): Promise<number> {
+  const channel = new Channel<LogEvent>();
+  channel.onmessage = (e) => onLine(e.text);
+  return invoke<number>("start_container_logs", { service, tail, channel });
 }
 
 export function errorMessage(e: unknown): string {

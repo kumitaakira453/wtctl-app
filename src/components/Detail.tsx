@@ -3,10 +3,19 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { useConfirm } from "../hooks/useConfirm";
 import { api } from "../lib/ipc";
-import { formatSize, PR_COLOR } from "../lib/status";
+import { feActiveFor, formatSize, PR_COLOR, samePath } from "../lib/status";
 import type { VerifyPlan } from "../lib/types";
 import { useApp } from "../state/app";
-import { disksAtom, metasAtom, prsAtom, selectedPathAtom, selectedWorktreeAtom, worktreesAtom } from "../state/atoms";
+import {
+  disksAtom,
+  metasAtom,
+  mountsAtom,
+  prsAtom,
+  selectedPathAtom,
+  selectedWorktreeAtom,
+  vitesAtom,
+  worktreesAtom,
+} from "../state/atoms";
 import { ContainerList } from "./ContainerList";
 import { FePanel } from "./FePanel";
 import { Icon } from "./Icon";
@@ -18,6 +27,8 @@ export function Detail() {
   const metas = useAtomValue(metasAtom);
   const prs = useAtomValue(prsAtom);
   const disks = useAtomValue(disksAtom);
+  const mounts = useAtomValue(mountsAtom);
+  const vites = useAtomValue(vitesAtom);
   const { run, runScheme } = useApp();
   const confirm = useConfirm();
   const setWorktrees = useSetAtom(worktreesAtom);
@@ -48,6 +59,9 @@ export function Detail() {
   const meta = entry?.meta;
   const pr = wt.branch ? prs[wt.branch] : undefined;
   const hasMenu = !wt.isMain || (plan?.migrations.length ?? 0) > 0;
+  // この worktree 固有の稼働状況（選択で変わる。グローバルなスタックパネルとは別）
+  const beHere = mounts.filter((m) => m.state === "worktree" && samePath(m.worktree, path)).map((m) => m.service);
+  const feHere = feActiveFor(path, vites);
 
   const openScheme = async () => setScheme(plan ?? (await api.planFor(path)));
 
@@ -126,6 +140,31 @@ export function Detail() {
             {meta.subject}
           </div>
         )}
+        {/* この worktree 固有の稼働状況（タブで変わる） */}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {wt.isMain ? (
+            <span className="text-[12px]" style={{ color: "var(--wt-muted)" }}>
+              メインチェックアウト（既定の稼働）
+            </span>
+          ) : beHere.length === 0 && !feHere ? (
+            <span className="text-[12px]" style={{ color: "var(--wt-muted)" }}>
+              この worktree はスタックに未差し替え（main が稼働中）
+            </span>
+          ) : (
+            <>
+              {beHere.length > 0 && (
+                <Badge color="var(--wt-warn)" soft>
+                  ● BE 稼働（{beHere.join(", ")}）
+                </Badge>
+              )}
+              {feHere && (
+                <Badge color="var(--wt-info)" soft>
+                  ▤ FE :3000 稼働
+                </Badge>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* アクション: 検証（スキーム）が主。ライフサイクルは ⋯ メニュー。 */}
@@ -167,6 +206,12 @@ export function Detail() {
         </div>
       </div>
 
+      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--wt-muted)" }}>
+        スタック全体
+        <span className="font-normal normal-case" style={{ color: "var(--wt-muted)" }}>
+          （全 worktree で共通・現在の差し替え状態）
+        </span>
+      </div>
       <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <ContainerList />
         <FePanel />
