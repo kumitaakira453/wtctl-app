@@ -17,6 +17,23 @@ fn rank(state: &str) -> i32 {
 pub struct Gh;
 
 impl Gh {
+    /// 指定リポジトリ（slug: owner/name）の最新リリースの (tag, url)。
+    /// gh 未導入/未認証/リリース無しなら None（private repo でも gh の認証で取得できる）。
+    pub fn latest_release(&self, slug: &str) -> Option<(String, String)> {
+        let out = Command::new("gh")
+            .args(["release", "view", "--repo", slug, "--json", "tagName,url"])
+            .stderr(Stdio::null())
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let v: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+        let tag = v.get("tagName")?.as_str()?.to_string();
+        let url = v.get("url").and_then(|x| x.as_str()).unwrap_or("").to_string();
+        Some((tag, url))
+    }
+
     pub fn pull_requests(&self, repo: &str) -> HashMap<String, PrInfo> {
         let out = Command::new("gh")
             .args([

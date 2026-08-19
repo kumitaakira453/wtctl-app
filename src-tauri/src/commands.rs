@@ -123,6 +123,65 @@ pub async fn repo_status() -> RepoStatus {
     })
 }
 
+// ---------------------------------------------------------------- 更新チェック
+
+const REPO_SLUG: &str = "kumitaakira453/wtctl-app";
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateInfo {
+    current: String,
+    latest: Option<String>,
+    url: Option<String>,
+    update_available: bool,
+}
+
+fn parse_ver(s: &str) -> Vec<u64> {
+    s.trim_start_matches('v')
+        .split('.')
+        .map(|p| {
+            p.chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect::<String>()
+                .parse()
+                .unwrap_or(0)
+        })
+        .collect()
+}
+
+fn version_gt(a: &str, b: &str) -> bool {
+    let (a, b) = (parse_ver(a), parse_ver(b));
+    for i in 0..a.len().max(b.len()) {
+        let (x, y) = (a.get(i).copied().unwrap_or(0), b.get(i).copied().unwrap_or(0));
+        if x != y {
+            return x > y;
+        }
+    }
+    false
+}
+
+/// GitHub の最新リリースを gh で確認し、現在の版より新しければ update_available を立てる。
+#[tauri::command]
+pub async fn check_update() -> UpdateInfo {
+    let current = env!("CARGO_PKG_VERSION").to_string();
+    let cur = current.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let (latest, url) = match crate::infra::gh::Gh.latest_release(REPO_SLUG) {
+            Some((tag, url)) => (Some(tag), Some(url)),
+            None => (None, None),
+        };
+        let update_available = latest.as_deref().map(|l| version_gt(l, &cur)).unwrap_or(false);
+        UpdateInfo { current: cur, latest, url, update_available }
+    })
+    .await
+    .unwrap_or(UpdateInfo {
+        current,
+        latest: None,
+        url: None,
+        update_available: false,
+    })
+}
+
 // ---------------------------------------------------------------- 読み取り
 
 #[tauri::command]

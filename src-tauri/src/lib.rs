@@ -24,6 +24,7 @@ pub fn run() {
             commands::get_config,
             commands::set_config,
             commands::repo_status,
+            commands::check_update,
             commands::list_worktrees,
             commands::get_live,
             commands::get_metas,

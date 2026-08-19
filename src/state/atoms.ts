@@ -6,6 +6,7 @@ import type {
   PrInfo,
   RepoStatus,
   ServiceMount,
+  UpdateInfo,
   ViteProcess,
   WorktreeEntry,
 } from "../lib/types";
@@ -16,6 +17,7 @@ export type SortMode = "recent" | "name";
 export const themeAtom = atom<Theme>("dark");
 
 export const repoStatusAtom = atom<RepoStatus | null>(null);
+export const updateInfoAtom = atom<UpdateInfo | null>(null);
 
 export const worktreesAtom = atom<WorktreeEntry[]>([]);
 export const mainPathAtom = atom<string>("");

@@ -8,11 +8,13 @@ import type {
   MetaEntry,
   PrInfo,
   RepoStatus,
+  UpdateInfo,
   VerifyPlan,
 } from "./types";
 
 /// 読み取り系コマンド。
 export const api = {
+  checkUpdate: () => invoke<UpdateInfo>("check_update"),
   getConfig: () => invoke<ConfigDto>("get_config"),
   setConfig: (repo: string, worktreeDir: string | null) =>
     invoke<void>("set_config", { repo, worktreeDir }),

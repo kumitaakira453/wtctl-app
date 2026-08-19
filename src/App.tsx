@@ -8,17 +8,19 @@ import { LogDrawer } from "./components/LogDrawer";
 import { SettingsModal } from "./components/SettingsModal";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { Spinner } from "./components/ui";
 import { useActionRunner } from "./hooks/useAction";
 import { useDashboard } from "./hooks/useDashboard";
 import { api } from "./lib/ipc";
 import { AppContext } from "./state/app";
-import { repoStatusAtom, themeAtom } from "./state/atoms";
+import { repoStatusAtom, themeAtom, updateInfoAtom } from "./state/atoms";
 
 export default function App() {
   const theme = useAtomValue(themeAtom);
   const status = useAtomValue(repoStatusAtom);
   const setStatusOnly = useSetAtom(repoStatusAtom);
+  const setUpdate = useSetAtom(updateInfoAtom);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
 
@@ -36,7 +38,9 @@ export default function App() {
 
   useEffect(() => {
     reloadStatus();
-  }, [reloadStatus]);
+    // 起動時に最新リリースを確認し、新しければバナーでサジェストする
+    api.checkUpdate().then(setUpdate).catch(() => {});
+  }, [reloadStatus, setUpdate]);
 
   const appApi = {
     run,
@@ -48,27 +52,30 @@ export default function App() {
 
   return (
     <AppContext.Provider value={appApi}>
-      <div className="flex h-full" style={{ background: "var(--wt-bg)", color: "var(--wt-fg)" }}>
-        {status === null ? (
-          <div className="flex h-full w-full items-center justify-center">
-            <Spinner size={22} />
-          </div>
-        ) : !configured ? (
-          <div className="h-full w-full">
-            <FirstRun onOpenSettings={() => setSettingsOpen(true)} />
-          </div>
-        ) : (
-          <>
-            <Sidebar onNew={() => setBranchOpen(true)} onSettings={() => setSettingsOpen(true)} />
-            <div className="relative flex min-w-0 flex-1 flex-col">
-              <TopBar />
-              <div className="min-h-0 flex-1">
-                <Detail />
-              </div>
-              <LogDrawer />
+      <div className="flex h-full flex-col" style={{ background: "var(--wt-bg)", color: "var(--wt-fg)" }}>
+        <UpdateBanner />
+        <div className="flex min-h-0 flex-1">
+          {status === null ? (
+            <div className="flex h-full w-full items-center justify-center">
+              <Spinner size={22} />
             </div>
-          </>
-        )}
+          ) : !configured ? (
+            <div className="h-full w-full">
+              <FirstRun onOpenSettings={() => setSettingsOpen(true)} />
+            </div>
+          ) : (
+            <>
+              <Sidebar onNew={() => setBranchOpen(true)} onSettings={() => setSettingsOpen(true)} />
+              <div className="relative flex min-w-0 flex-1 flex-col">
+                <TopBar />
+                <div className="min-h-0 flex-1">
+                  <Detail />
+                </div>
+                <LogDrawer />
+              </div>
+            </>
+          )}
+        </div>
 
         {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
         {branchOpen && <BranchPicker onClose={() => setBranchOpen(false)} />}

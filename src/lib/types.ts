@@ -114,6 +114,13 @@ export interface RepoStatus {
   error: string | null;
 }
 
+export interface UpdateInfo {
+  current: string;
+  latest: string | null;
+  url: string | null;
+  updateAvailable: boolean;
+}
+
 export type LogKind = "cmd" | "out" | "info" | "success" | "warn" | "error";
 
 export interface LogEvent {
