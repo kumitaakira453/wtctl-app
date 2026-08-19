@@ -143,9 +143,15 @@ export function TopBar() {
             <span className="text-xs font-medium">BE</span>
             <Icon name="expand_more" size={14} style={{ color: "var(--wt-muted)", opacity: 0.6 }} />
           </button>
-          <StackToggle up={stackUp} onStart={() => run("スタック起動", "stack_start", {})} onStop={async () => {
-            if (await confirm("スタックを停止しますか？（stop のみ・DB は down しません）")) await run("スタック停止", "stack_stop", {});
-          }} startTitle="スタック起動" stopTitle="スタック停止（stop のみ）" />
+          <StackToggle
+            up={stackUp}
+            onStart={() => run("BE 起動", "stack_start", {})}
+            onStop={async () => {
+              if (await confirm("BE を停止しますか？（stop のみ・DB は down しません）")) await run("BE 停止", "stack_stop", {});
+            }}
+            startTitle="BE 起動"
+            stopTitle="BE 停止（stop のみ）"
+          />
         </div>
         {stackPop && (
           <div
@@ -168,10 +174,10 @@ export function TopBar() {
           up={mainFe.listening}
           onStart={() => run("FE 起動", "fe_main", {})}
           onStop={async () => {
-            if (await confirm(`:${port} のメイン FE を停止しますか？`)) await run(`:${port} 停止`, "stop_main_fe", {});
+            if (await confirm(`FE（:${port}）を停止しますか？`)) await run("FE 停止", "stop_main_fe", {});
           }}
-          startTitle="FE を :3000 で起動（main）"
-          stopTitle={`:${port} の FE を停止`}
+          startTitle={`FE を :${port} で起動（main）`}
+          stopTitle={`FE（:${port}）を停止`}
         />
       </div>
 
@@ -190,7 +196,8 @@ export function TopBar() {
   );
 }
 
-/// 起動/停止をまとめた統一トグル（BE スタック / FE で共通。停止中=▶起動 / 稼働中=■停止）。
+/// 起動/停止の統一トグル（BE / FE 共通。停止中=▶起動 / 稼働中=■停止）。
+/// 処理中はスピナー表示にして二度押し・逆操作を防ぐ。
 function StackToggle({
   up,
   onStart,
@@ -199,14 +206,31 @@ function StackToggle({
   stopTitle,
 }: {
   up: boolean;
-  onStart: () => void;
-  onStop: () => void;
+  onStart: () => void | Promise<unknown>;
+  onStop: () => void | Promise<unknown>;
   startTitle: string;
   stopTitle: string;
 }) {
+  const [busy, setBusy] = useState(false);
+  const go = async (fn: () => void | Promise<unknown>) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await fn();
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (busy) {
+    return (
+      <span className="inline-flex items-center justify-center" style={{ width: 26, height: 26 }}>
+        <Spinner size={14} />
+      </span>
+    );
+  }
   return up ? (
-    <IconButton icon="stop" size={15} box={26} title={stopTitle} onClick={onStop} />
+    <IconButton icon="stop" size={15} box={26} title={stopTitle} onClick={() => go(onStop)} />
   ) : (
-    <IconButton icon="play_arrow" size={15} box={26} title={startTitle} onClick={onStart} />
+    <IconButton icon="play_arrow" size={15} box={26} title={startTitle} onClick={() => go(onStart)} />
   );
 }

@@ -5,15 +5,15 @@ use crate::error::WtResult;
 use crate::event::{LogEvent, Sink};
 
 pub fn start(ctx: &Ctx, sink: &Sink) -> WtResult<()> {
-    sink(LogEvent::info("スタックを起動します（docker compose start）"));
+    sink(LogEvent::info("BE を起動します（docker compose start）"));
     ctx.docker.stack_start(sink)?;
-    sink(LogEvent::success("スタックを起動しました"));
+    sink(LogEvent::success("BE を起動しました"));
     Ok(())
 }
 
 pub fn stop(ctx: &Ctx, sink: &Sink) -> WtResult<()> {
-    sink(LogEvent::info("スタックを停止します（docker compose stop / DB は down しません）"));
+    sink(LogEvent::info("BE を停止します（docker compose stop / DB は down しません）"));
     ctx.docker.stack_stop(sink)?;
-    sink(LogEvent::success("スタックを停止しました"));
+    sink(LogEvent::success("BE を停止しました"));
     Ok(())
 }

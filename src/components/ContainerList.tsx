@@ -64,7 +64,7 @@ export function ContainerList() {
 
       {!stackUp ? (
         <div className="px-4 py-6 text-center text-sm" style={{ color: "var(--wt-muted)" }}>
-          スタックが停止しています
+          BE が停止しています
         </div>
       ) : (
         <div>

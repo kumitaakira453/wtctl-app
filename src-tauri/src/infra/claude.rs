@@ -302,8 +302,12 @@ fn blocks_of(content: &Value) -> Vec<ClaudeBlock> {
                     "tool_use" => {
                         let name = b.get("name").and_then(|v| v.as_str()).unwrap_or("tool").to_string();
                         let input = b.get("input");
-                        // Edit / Write / MultiEdit はファイル差分として見せる
-                        if let Some(edit) = input.and_then(|v| edit_diff(v, &name)) {
+                        // Skill 呼び出しは生 JSON ではなく「スキル: 名前」に集約
+                        if name == "Skill" {
+                            let skill = input.and_then(|v| v.get("skill")).and_then(|v| v.as_str()).unwrap_or("skill");
+                            let args = input.and_then(|v| v.get("args")).and_then(|v| v.as_str()).unwrap_or("");
+                            blocks.push(ClaudeBlock { kind: "skill".into(), text: truncate(args), name: Some(skill.to_string()) });
+                        } else if let Some(edit) = input.and_then(|v| edit_diff(v, &name)) {
                             blocks.push(ClaudeBlock { kind: "edit".into(), text: truncate(&edit.1), name: Some(edit.0) });
                         } else {
                             let text = input.map(|v| serde_json::to_string_pretty(v).unwrap_or_default()).unwrap_or_default();

@@ -17,7 +17,7 @@ export function FirstRun({ onOpenSettings }: { onOpenSettings: () => void }) {
         <div className="text-lg font-semibold">wtctl へようこそ</div>
         <div className="mt-2 text-sm leading-relaxed" style={{ color: "var(--wt-fg-dim)" }}>
           はじめに wasurenai リポジトリの場所を設定してください。
-          worktree を Docker スタックに差し替えて動作確認できるようになります。
+          worktree の BE を Docker コンテナに差し替えて動作確認できるようになります。
         </div>
         {status?.error && (
           <div

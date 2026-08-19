@@ -142,7 +142,7 @@ export function Detail() {
             </span>
           ) : beHere.length === 0 && !feHere ? (
             <span className="text-[12px]" style={{ color: "var(--wt-muted)" }}>
-              この worktree はスタックに未差し替え（main が稼働中）
+              この worktree は BE に未差し替え（main が稼働中）
             </span>
           ) : (
             <>

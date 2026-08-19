@@ -33,12 +33,12 @@ pub fn apply_all(ctx: &Ctx, groups: &[String], sink: &Sink) -> WtResult<()> {
 /// スタックが停止していれば起動する（検証操作でいちいち止められないように）。
 pub fn ensure_stack(ctx: &Ctx, sink: &Sink) -> WtResult<()> {
     if !ctx.docker.stack_up() {
-        sink(LogEvent::info("スタックが停止しているため起動します"));
+        sink(LogEvent::info("BE が停止しているため起動します"));
         ctx.docker.stack_start(sink)?;
         if !ctx.docker.stack_up() {
-            return Err(WtError::new("スタックの起動に失敗しました"));
+            return Err(WtError::new("BE の起動に失敗しました"));
         }
-        sink(LogEvent::success("スタックを起動しました"));
+        sink(LogEvent::success("BE を起動しました"));
     }
     Ok(())
 }
