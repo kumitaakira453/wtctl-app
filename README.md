@@ -19,8 +19,13 @@ Tauri v2（Rust バックエンド）+ React + TypeScript + Tailwind で構築�
 
 ## スクリーンショット
 
-<!-- docs/dashboard.png などに配置 -->
+> スクリーンショットは `docs/dashboard.png` を追加すると下に表示されます（アプリ起動中に
+> `Shift`+`Cmd`+`4` → `Space` → ウィンドウをクリックで撮影し、`docs/` に配置）。
+
+<!-- 画像を追加したら以下のコメントを外す
 <p align="center"><img src="docs/dashboard.png" alt="ダッシュボード" width="900"></p>
+-->
+
 
 ---
 
