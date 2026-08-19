@@ -29,8 +29,11 @@ export function ContainerList() {
   const mounts = useAtomValue(mountsAtom);
   const stackUp = useAtomValue(stackUpAtom);
   const selected = useAtomValue(selectedPathAtom);
-  const [logService, setLogService] = useState<string | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
   const byService = new Map(mounts.map((m) => [m.service, m]));
+  // ログの初期タブは稼働中のサービス優先（無ければ bff）
+  const defaultLog =
+    KNOWN_SERVICES.find((s) => byService.get(s)?.containerState === "running") ?? KNOWN_SERVICES[0];
 
   return (
     <div
@@ -44,13 +47,28 @@ export function ContainerList() {
         <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--wt-muted)" }}>
           BE コンテナ
         </span>
-        <span
-          className="inline-flex items-center gap-1.5 text-[11px]"
-          style={{ color: stackUp ? "var(--wt-ok)" : "var(--wt-muted)" }}
-        >
-          <span className="inline-block rounded-full" style={{ width: 7, height: 7, background: stackUp ? "var(--wt-ok)" : "var(--wt-muted)" }} />
-          {stackUp ? "稼働中" : "停止中"}
-        </span>
+        <div className="flex items-center gap-2.5">
+          <span
+            className="inline-flex items-center gap-1.5 text-[11px]"
+            style={{ color: stackUp ? "var(--wt-ok)" : "var(--wt-muted)" }}
+          >
+            <span className="inline-block rounded-full" style={{ width: 7, height: 7, background: stackUp ? "var(--wt-ok)" : "var(--wt-muted)" }} />
+            {stackUp ? "稼働中" : "停止中"}
+          </span>
+          {stackUp && (
+            <button
+              type="button"
+              onClick={() => setLogOpen(true)}
+              title="docker ログを見る（タブで全サービス切替）"
+              className="rounded-md p-1 transition-colors"
+              style={{ color: "var(--wt-muted)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--wt-fg)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--wt-muted)")}
+            >
+              <Icon name="terminal" size={16} />
+            </button>
+          )}
+        </div>
       </div>
 
       {!stackUp ? (
@@ -69,7 +87,7 @@ export function ContainerList() {
             return (
               <div
                 key={svc}
-                className="group flex items-center gap-2.5 px-4 py-2"
+                className="flex items-center gap-2.5 px-4 py-2"
                 style={{
                   borderTop: i === 0 ? "none" : "1px solid var(--wt-border)",
                   background: mine ? "var(--wt-accent-soft)" : "transparent",
@@ -80,44 +98,31 @@ export function ContainerList() {
                   style={{ width: 8, height: 8, background: h.color }}
                   title={h.label}
                 />
-                <span className="min-w-0 flex-1 truncate font-mono text-[12.5px]" style={{ color: "var(--wt-fg)" }}>
-                  {svc}
-                </span>
-                <span className="shrink-0 font-mono text-[11px]" style={{ color: "var(--wt-muted)", width: 40, textAlign: "right" }}>
-                  {port ? `:${port}` : "—"}
-                </span>
-                {/* health は緑ドットで示すため、異常時（応答なし/停止）のみテキストを出す */}
-                <span className="shrink-0 text-[11px]" style={{ color: h.color, width: 54, textAlign: "right" }}>
-                  {h.label === "稼働中" ? "" : h.label}
-                </span>
-                {mount ? (
-                  <span
-                    className="shrink-0 rounded-md px-2 py-0.5 font-mono text-[10.5px] font-semibold"
-                    style={{ color: mount.color, border: `1px solid ${mount.color}`, minWidth: 78, textAlign: "center" }}
-                  >
-                    {mount.label(m)}
+                {/* 名前は切り詰めない。メタ情報（port/mount/health）は 2 行目に小さく置く */}
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="font-mono text-[12.5px] leading-tight" style={{ color: "var(--wt-fg)" }}>
+                    {svc}
                   </span>
-                ) : (
-                  <span className="shrink-0" style={{ minWidth: 78 }} />
-                )}
-                <button
-                  type="button"
-                  onClick={() => setLogService(svc)}
-                  title="docker ログを見る"
-                  className="shrink-0 rounded-md p-1 transition-colors"
-                  style={{ color: "var(--wt-muted)" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--wt-fg)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--wt-muted)")}
-                >
-                  <Icon name="terminal" size={16} />
-                </button>
+                  <span className="mt-0.5 flex items-center gap-2 text-[10.5px]" style={{ color: "var(--wt-muted)" }}>
+                    <span className="font-mono">{port ? `:${port}` : "—"}</span>
+                    {mount && (
+                      <span
+                        className="rounded px-1.5 py-px font-mono font-semibold"
+                        style={{ color: mount.color, border: `1px solid ${mount.color}` }}
+                      >
+                        {mount.label(m)}
+                      </span>
+                    )}
+                    {h.label !== "稼働中" && <span style={{ color: h.color }}>{h.label}</span>}
+                  </span>
+                </div>
               </div>
             );
           })}
         </div>
       )}
 
-      {logService && <LogsModal initial={logService} onClose={() => setLogService(null)} />}
+      {logOpen && <LogsModal initial={defaultLog} onClose={() => setLogOpen(false)} />}
     </div>
   );
 }
