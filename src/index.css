@@ -163,13 +163,9 @@ body {
   animation: wt-pulse 1.4s ease-in-out infinite;
 }
 
-/* タイトルバー（macOS overlay）用のドラッグ領域 */
-.wt-drag {
-  -webkit-app-region: drag;
-}
-.wt-no-drag {
-  -webkit-app-region: no-drag;
-}
+/* ウィンドウ移動は data-tauri-drag-region に一本化する。
+   CSS -webkit-app-region は macOS の WKWebView で JS の mousedown を横取りし、
+   data-tauri-drag-region と衝突して双方無効になるため使わない。 */
 
 /* ============================================================
    シンタックスハイライト（highlight.js トークン）
