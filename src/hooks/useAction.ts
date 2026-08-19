@@ -15,7 +15,16 @@ export function useActionRunner(afterDone: () => void) {
     async (steps: Step[]): Promise<boolean> => {
       if (steps.length === 0) return true;
       setOpen(true);
-      setTabs(steps.map((s) => ({ id: s.id, title: s.title, log: [], running: false, result: null })));
+      // タブは置き換えず upsert する: 別操作（BE 起動と FE 起動など）のログが
+      // 後の操作で上書きされないよう、既存タブを残したまま今回のステップを追加/更新する。
+      const CAP = 12;
+      setTabs((prev) => {
+        const incoming = new Set(steps.map((s) => s.id));
+        const kept = prev.filter((t) => !incoming.has(t.id));
+        const fresh = steps.map((s) => ({ id: s.id, title: s.title, log: [], running: false, result: null }));
+        // 新規タブは末尾。上限超過時は古い（=先頭側）タブから間引く。
+        return [...kept, ...fresh].slice(-CAP);
+      });
       setActive(steps[0].id);
       let ok = true;
       for (const s of steps) {

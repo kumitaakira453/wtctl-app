@@ -1,17 +1,34 @@
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { stripAnsi, TONE_COLOR, toneOf } from "../lib/ansi";
 import { actionActiveAtom, actionOpenAtom, actionTabsAtom } from "../state/atoms";
+import { Icon } from "./Icon";
 import { IconButton, Spinner } from "./ui";
 
 export function LogDrawer() {
   const [open, setOpen] = useAtom(actionOpenAtom);
-  const tabs = useAtomValue(actionTabsAtom);
+  const [tabs, setTabs] = useAtom(actionTabsAtom);
   const [active, setActive] = useAtom(actionActiveAtom);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
 
   const current = tabs.find((t) => t.id === active) ?? tabs[0];
+
+  const closeTab = (id: string) => {
+    const idx = tabs.findIndex((t) => t.id === id);
+    const rest = tabs.filter((t) => t.id !== id);
+    if (rest.length === 0) {
+      setOpen(false);
+      setTabs([]);
+      return;
+    }
+    if (active === id) {
+      // 閉じたタブの隣を選択
+      const next = rest[Math.min(idx, rest.length - 1)];
+      setActive(next.id);
+    }
+    setTabs(rest);
+  };
 
   useEffect(() => {
     const el = bodyRef.current;
@@ -45,11 +62,11 @@ export function LogDrawer() {
           {tabs.map((t) => {
             const on = t.id === current.id;
             return (
-              <button
-                type="button"
+              <div
                 key={t.id}
+                role="button"
                 onClick={() => setActive(t.id)}
-                className="flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors"
+                className="group flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md py-1 pl-2.5 pr-1 text-[12px] font-medium transition-colors"
                 style={{ background: on ? "var(--wt-active)" : "transparent", color: on ? "var(--wt-fg)" : "var(--wt-muted)" }}
               >
                 {t.running ? (
@@ -57,8 +74,20 @@ export function LogDrawer() {
                 ) : (
                   <span className="inline-block rounded-full" style={{ width: 7, height: 7, background: dot(t) }} />
                 )}
-                {t.title}
-              </button>
+                <span>{t.title}</span>
+                <span
+                  role="button"
+                  title="このタブを閉じる"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeTab(t.id);
+                  }}
+                  className="grid h-4 w-4 place-items-center rounded opacity-0 transition-opacity hover:bg-[var(--wt-hover)] group-hover:opacity-100"
+                  style={{ color: "var(--wt-muted)" }}
+                >
+                  <Icon name="close" size={12} />
+                </span>
+              </div>
             );
           })}
         </div>
