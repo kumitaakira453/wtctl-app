@@ -47,28 +47,19 @@ export function ContainerList() {
         <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--wt-muted)" }}>
           BE コンテナ
         </span>
-        <div className="flex items-center gap-2.5">
-          <span
-            className="inline-flex items-center gap-1.5 text-[11px]"
-            style={{ color: stackUp ? "var(--wt-ok)" : "var(--wt-muted)" }}
+        {stackUp && (
+          <button
+            type="button"
+            onClick={() => setLogOpen(true)}
+            title="docker ログを見る（タブで全サービス切替）"
+            className="rounded-md p-1 transition-colors"
+            style={{ color: "var(--wt-muted)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--wt-fg)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--wt-muted)")}
           >
-            <span className="inline-block rounded-full" style={{ width: 7, height: 7, background: stackUp ? "var(--wt-ok)" : "var(--wt-muted)" }} />
-            {stackUp ? "稼働中" : "停止中"}
-          </span>
-          {stackUp && (
-            <button
-              type="button"
-              onClick={() => setLogOpen(true)}
-              title="docker ログを見る（タブで全サービス切替）"
-              className="rounded-md p-1 transition-colors"
-              style={{ color: "var(--wt-muted)" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--wt-fg)")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--wt-muted)")}
-            >
-              <Icon name="terminal" size={16} />
-            </button>
-          )}
-        </div>
+            <Icon name="terminal" size={16} />
+          </button>
+        )}
       </div>
 
       {!stackUp ? (

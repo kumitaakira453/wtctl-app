@@ -279,6 +279,16 @@ pub async fn fe(path: String, channel: Channel<LogEvent>) -> Result<(), WtError>
     run_action(channel, move |ctx, sink| verify::fe(ctx, &path, sink)).await
 }
 
+/// 引数なしの FE 起動 = メインチェックアウトの FE を :3000 で起動する（BE の main 起動と統一）。
+#[tauri::command]
+pub async fn fe_main(channel: Channel<LogEvent>) -> Result<(), WtError> {
+    run_action(channel, |ctx, sink| {
+        let main = ctx.git.main_path()?;
+        verify::fe(ctx, &main, sink)
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn restore(channel: Channel<LogEvent>) -> Result<(), WtError> {
     run_action(channel, |ctx, sink| restore::restore(ctx, sink)).await

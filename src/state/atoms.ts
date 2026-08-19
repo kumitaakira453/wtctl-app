@@ -51,10 +51,6 @@ export const stackCollapsedAtom = atomWithStorage<boolean>("wtctl.stackCollapsed
 export const sidebarOpenAtom = atomWithStorage<boolean>("wtctl.sidebarOpen", true, undefined, {
   getOnInit: true,
 });
-export const stackOpenAtom = atomWithStorage<boolean>("wtctl.stackOpen", true, undefined, {
-  getOnInit: true,
-});
-
 // 差分ビューアの各カラム幅（ドラッグで可変・永続化）
 export const browserCommitsWAtom = atomWithStorage<number>("wtctl.browser.commitsW", 210, undefined, {
   getOnInit: true,

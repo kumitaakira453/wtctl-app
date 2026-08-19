@@ -82,6 +82,7 @@ pub fn run() {
             commands::verify,
             commands::be_apply,
             commands::fe,
+            commands::fe_main,
             commands::restore,
             commands::restore_be,
             commands::stop_main_fe,

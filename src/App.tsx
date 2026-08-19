@@ -7,7 +7,6 @@ import { FirstRun } from "./components/FirstRun";
 import { LogDrawer } from "./components/LogDrawer";
 import { SettingsModal } from "./components/SettingsModal";
 import { Sidebar } from "./components/Sidebar";
-import { StackPanel } from "./components/StackPanel";
 import { TopBar } from "./components/TopBar";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { Spinner } from "./components/ui";
@@ -15,12 +14,11 @@ import { useActionRunner } from "./hooks/useAction";
 import { useDashboard } from "./hooks/useDashboard";
 import { api } from "./lib/ipc";
 import { AppContext } from "./state/app";
-import { repoStatusAtom, sidebarOpenAtom, stackOpenAtom, themeAtom } from "./state/atoms";
+import { repoStatusAtom, sidebarOpenAtom, themeAtom } from "./state/atoms";
 
 export default function App() {
   const theme = useAtomValue(themeAtom);
   const sidebarOpen = useAtomValue(sidebarOpenAtom);
-  const stackOpen = useAtomValue(stackOpenAtom);
   const status = useAtomValue(repoStatusAtom);
   const setStatusOnly = useSetAtom(repoStatusAtom);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -70,12 +68,10 @@ export default function App() {
               <div className="flex min-w-0 flex-1 flex-col">
                 <TopBar />
                 <div className="flex min-h-0 flex-1">
-                  {/* 中央: 選択 worktree の詳細 */}
+                  {/* 中央: 選択 worktree の詳細（スタックはツールバーの popover で参照） */}
                   <div className="min-w-0 flex-1">
                     <Detail />
                   </div>
-                  {/* 右: 共通スタック（表示 ON のとき常設） */}
-                  {stackOpen && <StackPanel />}
                 </div>
               </div>
             </>
