@@ -5,7 +5,7 @@ use std::path::Path;
 
 use crate::domain::topology::PROJECT;
 use crate::error::WtResult;
-use crate::event::Sink;
+use crate::event::{LogEvent, Sink};
 use crate::infra::shell::{capture, stream};
 
 const APP_MOUNT_FMT: &str =
@@ -67,7 +67,30 @@ impl Docker {
     }
 
     pub fn stack_stop(&self, sink: &Sink) -> WtResult<()> {
-        self.run_compose(&["stop"], false, sink)
+        self.run_compose(&["stop"], false, sink)?;
+        self.prune_orphan_anon_volumes(sink);
+        Ok(())
+    }
+
+    /// `-V`（--renew-anon-volumes）での recreate が切り離した匿名ボリューム（venv 用の
+    /// `/app/.venv` マスク）を回収する。対象は「dangling かつ 64 桁 hex 名（=匿名）」のみ。
+    /// 稼働・停止いずれかのコンテナが参照する匿名 volume と named volume は dangling では
+    /// ないため対象外で、main / worktree の現用 venv は消えない。
+    pub fn prune_orphan_anon_volumes(&self, sink: &Sink) {
+        let listed =
+            capture(&["docker", "volume", "ls", "-qf", "dangling=true"], None, false).unwrap_or_default();
+        let targets: Vec<String> = listed
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|n| n.len() == 64 && n.chars().all(|c| c.is_ascii_hexdigit()))
+            .collect();
+        if targets.is_empty() {
+            return;
+        }
+        let mut args: Vec<&str> = vec!["docker", "volume", "rm"];
+        args.extend(targets.iter().map(String::as_str));
+        let _ = capture(&args, None, false);
+        sink(LogEvent::info(format!("未使用の匿名ボリューム {} 個を回収しました", targets.len())));
     }
 
     pub fn app_mount(&self, service: &str) -> String {
@@ -130,7 +153,9 @@ impl Docker {
         for s in services {
             args.push(s.as_str());
         }
-        self.run_compose(&args, with_override, sink)
+        self.run_compose(&args, with_override, sink)?;
+        self.prune_orphan_anon_volumes(sink);
+        Ok(())
     }
 
     pub fn compose_restart(&self, service: &str, sink: &Sink) -> WtResult<()> {
