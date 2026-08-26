@@ -380,6 +380,8 @@ fn stringify(v: &Value) -> String {
         Value::String(s) => s.clone(),
         Value::Array(arr) => arr
             .iter()
+            // 画像は別ブロックとして描画するため、ここでは落とす（base64 を本文に混ぜない）。
+            .filter(|b| b.get("type").and_then(|v| v.as_str()) != Some("image"))
             .map(|b| {
                 if let Some(t) = b.get("text").and_then(|x| x.as_str()) {
                     t.to_string()
@@ -414,12 +416,47 @@ fn push_user_text(blocks: &mut Vec<ClaudeBlock>, text: &str) {
         blocks.push(ClaudeBlock { kind: "skill".into(), text: truncate(trimmed), name: Some(name) });
         return;
     }
-    if is_human_text(text) {
-        blocks.push(ClaudeBlock { kind: "text".into(), text: text.to_string(), name: None });
+    // 画像添付時に入る注記は実画像を描画するので不要。`[Image: source: …]` は行全体が
+    // 注記なので落とし、`[Image #N]` は後ろに本文が続くのでマーカーだけ外す。
+    let cleaned = strip_image_markers(text);
+    if is_human_text(&cleaned) {
+        blocks.push(ClaudeBlock { kind: "text".into(), text: cleaned, name: None });
     }
 }
 
-fn blocks_of(content: &Value) -> Vec<ClaudeBlock> {
+fn strip_image_markers(text: &str) -> String {
+    let mut out: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let t = line.trim();
+        if t.starts_with("[Image: source:") && t.ends_with(']') {
+            continue;
+        }
+        let mut s = line.to_string();
+        // `[Image #12]` のような連番マーカーを取り除く（本文はそのまま残す）。
+        while let Some(i) = s.find("[Image #") {
+            match s[i..].find(']') {
+                Some(j) => s.replace_range(i..i + j + 1, ""),
+                None => break,
+            }
+        }
+        out.push(s.trim_start().to_string());
+    }
+    out.join("\n").trim().to_string()
+}
+
+/// 画像ブロックを「セッション内での通し番号」で表す。実データ（base64）は転送量が
+/// 大きいので transcript には載せず、表示時に `image_at` で個別に取得する。
+fn push_image(blocks: &mut Vec<ClaudeBlock>, source: Option<&Value>, seq: &mut usize) {
+    let media = source
+        .and_then(|s| s.get("media_type"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("image/png")
+        .to_string();
+    blocks.push(ClaudeBlock { kind: "image".into(), text: seq.to_string(), name: Some(media) });
+    *seq += 1;
+}
+
+fn blocks_of(content: &Value, img_seq: &mut usize) -> Vec<ClaudeBlock> {
     let mut blocks: Vec<ClaudeBlock> = Vec::new();
     match content {
         Value::String(s) => push_user_text(&mut blocks, s),
@@ -453,12 +490,21 @@ fn blocks_of(content: &Value) -> Vec<ClaudeBlock> {
                         }
                     }
                     "tool_result" => {
-                        let text = b.get("content").map(stringify).unwrap_or_default();
-                        blocks.push(ClaudeBlock { kind: "tool_result".into(), text: truncate(&text), name: None });
+                        let content = b.get("content");
+                        let text = content.map(stringify).unwrap_or_default();
+                        if !text.trim().is_empty() {
+                            blocks.push(ClaudeBlock { kind: "tool_result".into(), text: truncate(&text), name: None });
+                        }
+                        // スクリーンショット等、ツール結果に含まれる画像も表示対象にする。
+                        if let Some(Value::Array(items)) = content {
+                            for it in items {
+                                if it.get("type").and_then(|v| v.as_str()) == Some("image") {
+                                    push_image(&mut blocks, it.get("source"), img_seq);
+                                }
+                            }
+                        }
                     }
-                    "image" => {
-                        blocks.push(ClaudeBlock { kind: "image".into(), text: "[画像]".into(), name: None });
-                    }
+                    "image" => push_image(&mut blocks, b.get("source"), img_seq),
                     _ => {}
                 }
             }
@@ -480,6 +526,7 @@ pub fn transcript(worktree: &str, session: &str) -> Vec<ClaudeMessage> {
         Err(_) => return vec![],
     };
     let mut msgs: Vec<ClaudeMessage> = Vec::new();
+    let mut img_seq: usize = 0;
     for line in content.lines() {
         let d: Value = match serde_json::from_str(line) {
             Ok(v) => v,
@@ -493,7 +540,7 @@ pub fn transcript(worktree: &str, session: &str) -> Vec<ClaudeMessage> {
             Some(c) => c,
             None => continue,
         };
-        let blocks = blocks_of(content);
+        let blocks = blocks_of(content, &mut img_seq);
         if blocks.is_empty() {
             continue;
         }
@@ -504,4 +551,59 @@ pub fn transcript(worktree: &str, session: &str) -> Vec<ClaudeMessage> {
         });
     }
     msgs
+}
+
+/// content 配列を blocks_of と同じ順序で走査し、画像 source を列挙する。
+/// 通し番号を transcript と一致させるため、走査規則はここに一本化する。
+fn each_image_source<'a>(content: &'a Value, out: &mut Vec<&'a Value>) {
+    if let Value::Array(arr) = content {
+        for b in arr {
+            match b.get("type").and_then(|v| v.as_str()) {
+                Some("image") => out.push(b),
+                Some("tool_result") => {
+                    if let Some(Value::Array(items)) = b.get("content") {
+                        for it in items {
+                            if it.get("type").and_then(|v| v.as_str()) == Some("image") {
+                                out.push(it);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+/// セッション内 index 番目の画像を data URI で返す（read-only・遅延取得）。
+pub fn image_at(worktree: &str, session: &str, index: usize) -> Option<String> {
+    let dir = projects_dir_for(worktree)?;
+    let content = fs::read_to_string(dir.join(format!("{session}.jsonl"))).ok()?;
+    let mut seq = 0usize;
+    for line in content.lines() {
+        let d: Value = match serde_json::from_str(line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let t = d.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        if t != "user" && t != "assistant" {
+            continue;
+        }
+        let msg = match d.get("message").and_then(|m| m.get("content")) {
+            Some(c) => c,
+            None => continue,
+        };
+        let mut found: Vec<&Value> = Vec::new();
+        each_image_source(msg, &mut found);
+        for b in found {
+            if seq == index {
+                let src = b.get("source")?;
+                let media = src.get("media_type").and_then(|v| v.as_str()).unwrap_or("image/png");
+                let data = src.get("data").and_then(|v| v.as_str())?;
+                return Some(format!("data:{media};base64,{data}"));
+            }
+            seq += 1;
+        }
+    }
+    None
 }

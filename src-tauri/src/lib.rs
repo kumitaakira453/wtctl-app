@@ -77,6 +77,7 @@ pub fn run() {
             commands::commit_diff,
             commands::claude_sessions,
             commands::claude_transcript,
+            commands::claude_image,
             commands::start_container_logs,
             commands::stop_container_logs,
             commands::verify,

@@ -208,6 +208,14 @@ pub async fn claude_transcript(path: String, session: String) -> Result<Vec<crat
         .map_err(|e| WtError::new(e.to_string()))
 }
 
+/// セッション内 index 番目の画像を data URI で返す。base64 は大きいので個別取得にする。
+#[tauri::command]
+pub async fn claude_image(path: String, session: String, index: usize) -> Result<Option<String>, WtError> {
+    tauri::async_runtime::spawn_blocking(move || crate::infra::claude::image_at(&path, &session, index))
+        .await
+        .map_err(|e| WtError::new(e.to_string()))
+}
+
 /// `docker logs -f` を起動して行を Channel へストリームする（lazydocker 相当）。stream id を返す。
 #[tauri::command]
 pub fn start_container_logs(service: String, tail: u32, channel: Channel<LogEvent>) -> Result<u64, WtError> {

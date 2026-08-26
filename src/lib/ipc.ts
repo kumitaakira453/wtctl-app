@@ -42,6 +42,8 @@ export const api = {
   claudeSessions: (path: string) => invoke<ClaudeSession[]>("claude_sessions", { path }),
   claudeTranscript: (path: string, session: string) =>
     invoke<ClaudeMessage[]>("claude_transcript", { path, session }),
+  claudeImage: (path: string, session: string, index: number) =>
+    invoke<string | null>("claude_image", { path, session, index }),
 };
 
 /// アクション系コマンド。実行ログを onLog で逐次受け取り、完了時に resolve / 失敗で reject。

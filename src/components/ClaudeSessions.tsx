@@ -117,7 +117,77 @@ function Collapsible({ icon, label, body, color }: { icon: string; label: string
   );
 }
 
-function Block({ b }: { b: ClaudeBlock }) {
+/// 画像は base64 が大きいので transcript には載せず、描画時に通し番号で取得する。
+/// クリックで原寸表示。
+function ImageBlock({ path, session, index }: { path: string; session: string; index: number }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [zoom, setZoom] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setSrc(null);
+    setFailed(false);
+    api
+      .claudeImage(path, session, index)
+      .then((d) => {
+        if (!alive) return;
+        if (d) setSrc(d);
+        else setFailed(true);
+      })
+      .catch(() => alive && setFailed(true));
+    return () => {
+      alive = false;
+    };
+  }, [path, session, index]);
+
+  if (failed) {
+    return (
+      <div className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--wt-muted)" }}>
+        <Icon name="broken_image" size={13} />
+        画像を読み込めませんでした
+      </div>
+    );
+  }
+  if (!src) {
+    return (
+      <div
+        className="flex items-center gap-2 rounded-md px-2 py-3 text-[11.5px]"
+        style={{ border: "1px dashed var(--wt-border)", color: "var(--wt-muted)" }}
+      >
+        <Spinner size={12} />
+        画像を読み込み中…
+      </div>
+    );
+  }
+  return (
+    <>
+      <img
+        src={src}
+        alt=""
+        onClick={() => setZoom(true)}
+        className="my-1 cursor-zoom-in rounded-md"
+        style={{ maxWidth: "100%", maxHeight: 360, objectFit: "contain", border: "1px solid var(--wt-border)" }}
+      />
+      {zoom && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-6"
+          style={{ background: "rgba(0,0,0,0.8)" }}
+          onClick={() => setZoom(false)}
+        >
+          <img
+            src={src}
+            alt=""
+            className="cursor-zoom-out rounded-lg"
+            style={{ maxWidth: "94vw", maxHeight: "92vh", objectFit: "contain" }}
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+function Block({ b, path, session }: { b: ClaudeBlock; path: string; session: string }) {
   switch (b.kind) {
     case "text":
       return (
@@ -181,13 +251,13 @@ function Block({ b }: { b: ClaudeBlock }) {
     case "tool_result":
       return <ToolBlock icon="subdirectory_arrow_right" label="結果" body={b.text} color="var(--wt-muted)" />;
     case "image":
-      return <div className="text-[12px]" style={{ color: "var(--wt-muted)" }}>［画像］</div>;
+      return <ImageBlock path={path} session={session} index={Number(b.text)} />;
     default:
       return null;
   }
 }
 
-function MessageRow({ m }: { m: ClaudeMessage }) {
+function MessageRow({ m, path, session }: { m: ClaudeMessage; path: string; session: string }) {
   const isUser = m.role === "user";
   const hasSpeech = m.blocks.some((b) => b.kind === "text" || b.kind === "command");
   // 人間の発話 / Claude の応答のみヘッダを出す。ツール結果だけのターンは淡く続ける。
@@ -206,7 +276,7 @@ function MessageRow({ m }: { m: ClaudeMessage }) {
       )}
       <div className="flex min-w-0 flex-col gap-1">
         {m.blocks.map((b, i) => (
-          <Block key={i} b={b} />
+          <Block key={i} b={b} path={path} session={session} />
         ))}
       </div>
     </div>
@@ -215,7 +285,7 @@ function MessageRow({ m }: { m: ClaudeMessage }) {
 
 /// 会話を仮想スクロールで描画（長いセッションでも軽い）。session ごとに remount して
 /// マウント時に最下部（最新）へスクロールする。行の高さは measureElement で動的計測。
-function Transcript({ msgs }: { msgs: ClaudeMessage[] }) {
+function Transcript({ msgs, path, session }: { msgs: ClaudeMessage[]; path: string; session: string }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const virt = useVirtualizer({
     count: msgs.length,
@@ -241,7 +311,7 @@ function Transcript({ msgs }: { msgs: ClaudeMessage[] }) {
             ref={virt.measureElement}
             style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vi.start}px)` }}
           >
-            <MessageRow m={msgs[vi.index]} />
+            <MessageRow m={msgs[vi.index]} path={path} session={session} />
           </div>
         ))}
       </div>
@@ -363,7 +433,7 @@ export function ClaudeSessions({ path }: { path: string }) {
             <Spinner size={16} />
           </div>
         ) : (
-          <Transcript key={`${active}:${nonce}`} msgs={msgs} />
+          <Transcript key={`${active}:${nonce}`} msgs={msgs} path={path} session={active ?? ""} />
         )}
       </div>
     </div>
