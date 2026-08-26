@@ -1,6 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ansiToSegments } from "../lib/ansi";
 import { highlightCode, langForPath } from "../lib/highlight";
 import { api } from "../lib/ipc";
 import { renderMarkdown } from "../lib/markdown";
@@ -31,21 +32,40 @@ function ToolBlock({
   const lines = body.length ? body.split("\n") : [];
   const hasMore = lines.length > PREVIEW_LINES;
   const shown = open || !hasMore ? body : lines.slice(0, PREVIEW_LINES).join("\n");
+  // コマンド出力には ANSI エスケープが混ざる。素で出すと `[2m` 等が文字化けして見えるため、
+  // 実際の色として描画する（色付けが無い場合は stripAnsi 相当で消える）。
+  const hasAnsi = shown.includes("\x1b[");
   return (
     <div className="my-1 min-w-0 rounded-md" style={{ border: "1px solid var(--wt-border)", background: "var(--wt-panel)" }}>
       <div className="flex items-center gap-1.5 px-2 py-1 text-[11.5px] font-medium" style={{ color }}>
         <Icon name={icon} size={13} />
         {label}
       </div>
-      {body.length > 0 && (
-        <pre
-          className="hljs-diff overflow-x-auto whitespace-pre-wrap break-all px-2.5 pb-1.5 font-mono text-[11px] leading-[1.5]"
-          style={{ color: "var(--wt-fg-dim)", maxHeight: open ? 320 : undefined, overflowY: open ? "auto" : "hidden" }}
-          {...(lang
-            ? { dangerouslySetInnerHTML: { __html: highlightCode(shown, lang) } }
-            : { children: shown })}
-        />
-      )}
+      {body.length > 0 &&
+        (hasAnsi ? (
+          <pre
+            className="overflow-x-auto whitespace-pre-wrap break-all px-2.5 pb-1.5 font-mono text-[11px] leading-[1.5]"
+            style={{ color: "var(--wt-fg-dim)", maxHeight: open ? 320 : undefined, overflowY: open ? "auto" : "hidden" }}
+          >
+            {shown.split("\n").map((l, i) => (
+              <div key={i}>
+                {ansiToSegments(l).map((s, j) => (
+                  <span key={j} style={{ color: s.color, fontWeight: s.bold ? 600 : undefined }}>
+                    {s.text}
+                  </span>
+                ))}
+              </div>
+            ))}
+          </pre>
+        ) : (
+          <pre
+            className="hljs-diff overflow-x-auto whitespace-pre-wrap break-all px-2.5 pb-1.5 font-mono text-[11px] leading-[1.5]"
+            style={{ color: "var(--wt-fg-dim)", maxHeight: open ? 320 : undefined, overflowY: open ? "auto" : "hidden" }}
+            {...(lang
+              ? { dangerouslySetInnerHTML: { __html: highlightCode(shown, lang) } }
+              : { children: shown })}
+          />
+        ))}
       {hasMore && (
         <button
           type="button"
