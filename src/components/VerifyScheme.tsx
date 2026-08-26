@@ -130,6 +130,10 @@ export function VerifyScheme({
 
   const run = async () => {
     const steps: Step[] = [];
+    // FE は docker に依存しないので BE 差し替え・migration を待たずに先行させる。
+    if (fe) {
+      steps.push({ id: "fe", title: "FE 起動", cmd: "fe", args: { path: worktree.path }, parallel: true });
+    }
     if (groups.size > 0) {
       steps.push({
         id: "be",
@@ -140,9 +144,6 @@ export function VerifyScheme({
     }
     if (migration && migGroups.length > 0) {
       steps.push({ id: "migration", title: "migration 適用", cmd: "migration_apply_all", args: { groups: migGroups } });
-    }
-    if (fe) {
-      steps.push({ id: "fe", title: "FE 起動", cmd: "fe", args: { path: worktree.path } });
     }
     onClose();
     await runScheme(steps);

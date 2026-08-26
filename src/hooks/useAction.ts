@@ -28,18 +28,15 @@ export function useActionRunner(afterDone: () => void) {
         // 新規タブは末尾。上限超過時は古い（=先頭側）タブから間引く。
         return [...kept, ...fresh].slice(-CAP);
       });
-      setActive(steps[0].id);
-      let ok = true;
-      for (const s of steps) {
-        setActive(s.id);
+      const runOne = async (s: Step): Promise<boolean> => {
         setTabs((tabs) => tabs.map((t) => (t.id === s.id ? { ...t, running: true } : t)));
         try {
           await runAction(s.cmd, s.args, (e) =>
             setTabs((tabs) => tabs.map((t) => (t.id === s.id ? { ...t, log: [...t.log, e] } : t))),
           );
           setTabs((tabs) => tabs.map((t) => (t.id === s.id ? { ...t, running: false, result: "ok" } : t)));
+          return true;
         } catch (err) {
-          ok = false;
           setTabs((tabs) =>
             tabs.map((t) =>
               t.id === s.id
@@ -52,9 +49,29 @@ export function useActionRunner(afterDone: () => void) {
                 : t,
             ),
           );
-          break;
+          return false;
         }
-      }
+      };
+
+      // parallel 指定のステップは直列の列を待たずに先行させる（FE 起動は BE 差し替え・
+      // migration に依存しないため、npm ci の待ち時間を BE の recreate と重ねられる）。
+      const independent = steps.filter((s) => s.parallel);
+      const chain = steps.filter((s) => !s.parallel);
+      // 進行の主線は直列の列なので、そちらを初期表示にする。
+      setActive((chain[0] ?? steps[0]).id);
+      const spawned = independent.map((s) => runOne(s));
+
+      const serial = (async () => {
+        for (const s of chain) {
+          setActive(s.id);
+          // 直列の列は依存関係があるため、1 つ失敗したら以降は実行しない。
+          if (!(await runOne(s))) return false;
+        }
+        return true;
+      })();
+
+      const results = await Promise.all([serial, ...spawned]);
+      const ok = results.every(Boolean);
       afterDone();
       // 完了して成功したタブは自動で閉じる。実行中でないタブが残っていると
       // 進行中の操作が紛れて分かりにくいため。失敗タブは原因を追えるよう残す。

@@ -5,6 +5,8 @@ export interface Step {
   title: string;
   cmd: string;
   args: Record<string, unknown>;
+  /// 他ステップに依存せず、直列の列とは並行に走らせる（例: FE 起動は BE 差し替えを待たない）。
+  parallel?: boolean;
 }
 
 export type RunFn = (
