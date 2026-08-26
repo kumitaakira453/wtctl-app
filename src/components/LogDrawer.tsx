@@ -14,6 +14,17 @@ export function LogDrawer() {
 
   const current = tabs.find((t) => t.id === active) ?? tabs[0];
 
+  // ドロワーを閉じるときに完了済みタブは破棄する。次に開いたとき、終わった操作の
+  // ログが残っていると実行中のものと紛らわしいため。実行中タブは残す。
+  const closeDrawer = () => {
+    setOpen(false);
+    setTabs((prev) => {
+      const rest = prev.filter((t) => t.running);
+      if (rest.length && !rest.some((t) => t.id === active)) setActive(rest[rest.length - 1].id);
+      return rest;
+    });
+  };
+
   const closeTab = (id: string) => {
     const idx = tabs.findIndex((t) => t.id === id);
     const rest = tabs.filter((t) => t.id !== id);
@@ -92,7 +103,7 @@ export function LogDrawer() {
           })}
         </div>
         <IconButton icon={copied ? "check" : "content_copy"} onClick={copy} title="このタブのログをコピー" size={17} />
-        <IconButton icon="close" onClick={() => setOpen(false)} title="閉じる" size={18} />
+        <IconButton icon="close" onClick={closeDrawer} title="閉じる（完了したタブは破棄）" size={18} />
       </div>
       <div ref={bodyRef} className="flex-1 overflow-y-auto px-4 py-3" style={{ background: "var(--wt-bg)" }}>
         {current.log.length === 0 && (

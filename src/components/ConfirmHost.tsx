@@ -40,7 +40,7 @@ export function ConfirmHost() {
             キャンセル
           </Button>
           <Button variant={req.danger ? "danger" : "primary"} onClick={() => done(true)}>
-            実行
+            {req.confirmLabel ?? "実行"}
           </Button>
         </div>
       </div>

@@ -147,7 +147,9 @@ export function TopBar() {
             up={stackUp}
             onStart={() => run("BE 起動", "stack_start", {})}
             onStop={async () => {
-              if (await confirm("BE を停止しますか？（stop のみ・DB は down しません）")) await run("BE 停止", "stack_stop", {});
+              if (await confirm("BE を停止しますか？（stop のみ・DB は down しません）", false, "停止")) {
+                await run("BE 停止", "stack_stop", {});
+              }
             }}
             startTitle="BE 起動"
             stopTitle="BE 停止（stop のみ）"
@@ -174,7 +176,9 @@ export function TopBar() {
           up={mainFe.listening}
           onStart={() => run("FE 起動", "fe_main", {})}
           onStop={async () => {
-            if (await confirm(`FE（:${port}）を停止しますか？`)) await run("FE 停止", "stop_main_fe", {});
+            if (await confirm(`FE（:${port}）を停止しますか？`, false, "停止")) {
+              await run("FE 停止", "stop_main_fe", {});
+            }
           }}
           startTitle={`FE を :${port} で起動（main）`}
           stopTitle={`FE（:${port}）を停止`}

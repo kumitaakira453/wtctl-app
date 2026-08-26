@@ -20,6 +20,12 @@ export const SERVICE_PORT: Record<string, number | null> = {
   "hanarenai-integration": 8002,
 };
 
+// 差し替え対象ではないが同じスタックで動く基盤サービス。ログ閲覧の対象にする。
+export const INFRA_SERVICES = ["db", "dynamodb", "garage", "elasticmq", "selenium"] as const;
+
+// ログを見られる全サービス（アプリ + 基盤）。
+export const LOGGABLE_SERVICES: string[] = [...KNOWN_SERVICES, ...INFRA_SERVICES];
+
 export interface GroupDef {
   key: string;
   services: string[];

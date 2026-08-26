@@ -75,7 +75,7 @@ export function Detail() {
     const msg = dirty
       ? `${wt.name} に未コミット変更があります。破棄して${label}しますか？`
       : `${wt.name} を${label}しますか？`;
-    if (!(await confirm(msg, dirty))) return;
+    if (!(await confirm(msg, dirty, label))) return;
     const ok = await run(label, cmd, { path, force: dirty });
     if (ok) {
       // 成功時は一覧から即座に除去し選択を外す（フル更新も afterDone で走る）
@@ -88,7 +88,7 @@ export function Detail() {
     setMenu(false);
     const p = plan ?? (await api.planFor(path));
     if (p.migrations.length === 0) return;
-    if (await confirm(`${wt.name} の migration を base まで巻き戻しますか？`, true)) {
+    if (await confirm(`${wt.name} の migration を base まで巻き戻しますか？`, true, "巻き戻す")) {
       await runScheme([
         {
           id: "rollback",

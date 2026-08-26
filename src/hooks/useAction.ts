@@ -4,6 +4,9 @@ import { errorMessage, runAction } from "../lib/ipc";
 import type { Step } from "../state/app";
 import { actionActiveAtom, actionOpenAtom, actionTabsAtom } from "../state/atoms";
 
+/// 成功したタブを畳むまでの猶予。完了したことが目視できる程度に置く。
+const AUTO_CLOSE_MS = 2500;
+
 /// 検証スキーム等の複数ステップを順に実行し、各ステップをタブに分けてログを保持する。
 /// 完了後に afterDone（ダッシュボード更新）を呼ぶ。1 ステップ失敗で以降は中断。
 export function useActionRunner(afterDone: () => void) {
@@ -53,6 +56,22 @@ export function useActionRunner(afterDone: () => void) {
         }
       }
       afterDone();
+      // 完了して成功したタブは自動で閉じる。実行中でないタブが残っていると
+      // 進行中の操作が紛れて分かりにくいため。失敗タブは原因を追えるよう残す。
+      if (ok) {
+        const doneIds = new Set(steps.map((s) => s.id));
+        setTimeout(() => {
+          setTabs((tabs) => {
+            const rest = tabs.filter((t) => !(doneIds.has(t.id) && !t.running && t.result === "ok"));
+            if (rest.length === 0) {
+              setOpen(false);
+            } else {
+              setActive((cur) => (rest.some((t) => t.id === cur) ? cur : rest[rest.length - 1].id));
+            }
+            return rest;
+          });
+        }, AUTO_CLOSE_MS);
+      }
       return ok;
     },
     [afterDone, setActive, setOpen, setTabs],

@@ -47,19 +47,18 @@ export function ContainerList() {
         <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--wt-muted)" }}>
           BE コンテナ
         </span>
-        {stackUp && (
-          <button
-            type="button"
-            onClick={() => setLogOpen(true)}
-            title="docker ログを見る（タブで全サービス切替）"
-            className="rounded-md p-1 transition-colors"
-            style={{ color: "var(--wt-muted)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--wt-fg)")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--wt-muted)")}
-          >
-            <Icon name="terminal" size={16} />
-          </button>
-        )}
+        {/* 停止中・起動処理中でもログは見たい（起動失敗の原因確認）ので stackUp では隠さない */}
+        <button
+          type="button"
+          onClick={() => setLogOpen(true)}
+          title="docker ログを見る（タブで全サービス切替）"
+          className="rounded-md p-1 transition-colors"
+          style={{ color: "var(--wt-muted)" }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--wt-fg)")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--wt-muted)")}
+        >
+          <Icon name="terminal" size={16} />
+        </button>
       </div>
 
       {!stackUp ? (

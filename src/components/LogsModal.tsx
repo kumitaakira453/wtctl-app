@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ansiToSegments, logLineColor, stripAnsi } from "../lib/ansi";
 import { api, startContainerLogs } from "../lib/ipc";
-import { KNOWN_SERVICES } from "../lib/topology";
+import { INFRA_SERVICES, KNOWN_SERVICES } from "../lib/topology";
 import { Modal } from "./ui";
 
 const TAIL = 500;
@@ -80,6 +80,22 @@ export function LogsModal({ initial, onClose }: { initial: string; onClose: () =
               key={svc}
               onClick={() => setActive(svc)}
               className="rounded-md px-2.5 py-1 font-mono text-[11.5px] font-medium transition-colors"
+              style={{ background: on ? "var(--wt-active)" : "transparent", color: on ? "var(--wt-fg)" : "var(--wt-muted)" }}
+            >
+              {svc}
+            </button>
+          );
+        })}
+        {/* 基盤サービス: 差し替え対象ではないが不具合切り分けでログを見たい */}
+        <span className="mx-1 h-4 w-px" style={{ background: "var(--wt-border)" }} />
+        {INFRA_SERVICES.map((svc) => {
+          const on = svc === active;
+          return (
+            <button
+              type="button"
+              key={svc}
+              onClick={() => setActive(svc)}
+              className="rounded-md px-2.5 py-1 font-mono text-[11.5px] transition-colors"
               style={{ background: on ? "var(--wt-active)" : "transparent", color: on ? "var(--wt-fg)" : "var(--wt-muted)" }}
             >
               {svc}

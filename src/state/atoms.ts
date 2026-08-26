@@ -109,6 +109,8 @@ export const selectedWorktreeAtom = atom((get) => {
 export interface ConfirmRequest {
   message: string;
   danger: boolean;
+  /// 確定ボタンの文言。未指定なら「実行」。
+  confirmLabel?: string;
   resolve: (ok: boolean) => void;
 }
 export const confirmAtom = atom<ConfirmRequest | null>(null);
