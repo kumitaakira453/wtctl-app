@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useConfirm } from "../hooks/useConfirm";
 import { useApp } from "../state/app";
 import {
+  actionBusyAtom,
   loadingAtom,
   mainFeAtom,
   mainFePortAtom,
@@ -93,6 +94,8 @@ export function TopBar() {
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
   const { run, refresh } = useApp();
   const confirm = useConfirm();
+  // 起動・停止・検証・health は同じスタックを触るので、実行中は互いに受け付けない。
+  const busy = useAtomValue(actionBusyAtom);
 
   // スタック詳細（BE コンテナ一覧）はツールバーから popover で開く
   const [stackPop, setStackPop] = useState(false);
@@ -187,7 +190,12 @@ export function TopBar() {
 
       <div className="ml-auto flex items-center gap-1.5">
         {loading && <Spinner size={14} />}
-        <IconButton icon="health_and_safety" title="health（停止/差し替え崩れを自動復旧）" onClick={() => run("health", "health_check", {})} />
+        <IconButton
+          icon="health_and_safety"
+          disabled={busy}
+          title={busy ? "他の操作の実行中です" : "health（停止/差し替え崩れを自動復旧）"}
+          onClick={() => run("health", "health_check", {})}
+        />
         <IconButton icon="refresh" title="再読み込み" onClick={() => void refresh()} />
         <UpdateCheck />
         <IconButton
@@ -216,8 +224,11 @@ function StackToggle({
   stopTitle: string;
 }) {
   const [busy, setBusy] = useState(false);
+  // 自分が実行中でなくても、他の操作（別サービスの起動停止・検証）が走っている間は
+  // 同じスタックを触るため受け付けない。
+  const otherBusy = useAtomValue(actionBusyAtom);
   const go = async (fn: () => void | Promise<unknown>) => {
-    if (busy) return;
+    if (busy || otherBusy) return;
     setBusy(true);
     try {
       await fn();
@@ -233,8 +244,22 @@ function StackToggle({
     );
   }
   return up ? (
-    <IconButton icon="stop" size={15} box={26} title={stopTitle} onClick={() => go(onStop)} />
+    <IconButton
+      icon="stop"
+      size={15}
+      box={26}
+      disabled={otherBusy}
+      title={otherBusy ? "他の操作の実行中です" : stopTitle}
+      onClick={() => go(onStop)}
+    />
   ) : (
-    <IconButton icon="play_arrow" size={15} box={26} title={startTitle} onClick={() => go(onStart)} />
+    <IconButton
+      icon="play_arrow"
+      size={15}
+      box={26}
+      disabled={otherBusy}
+      title={otherBusy ? "他の操作の実行中です" : startTitle}
+      onClick={() => go(onStart)}
+    />
   );
 }

@@ -128,3 +128,7 @@ export interface ActionTab {
 export const actionOpenAtom = atom(false);
 export const actionTabsAtom = atom<ActionTab[]>([]);
 export const actionActiveAtom = atom<string>("");
+
+/// 実行中の操作があるか。起動・停止・検証は同じスタックを触るので、
+/// 実行中は他の操作を受け付けないための排他に使う。
+export const actionBusyAtom = atom((get) => get(actionTabsAtom).some((t) => t.running));

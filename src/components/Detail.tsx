@@ -7,6 +7,7 @@ import { feActiveFor, formatSize, PR_COLOR, samePath } from "../lib/status";
 import type { VerifyPlan } from "../lib/types";
 import { useApp } from "../state/app";
 import {
+  actionBusyAtom,
   detailTabAtom,
   disksAtom,
   metasAtom,
@@ -38,6 +39,8 @@ export function Detail() {
   const setSelected = useSetAtom(selectedPathAtom);
   const [scheme, setScheme] = useState<VerifyPlan | null>(null);
   const [tab, setTab] = useAtom(detailTabAtom);
+  // 起動・停止・検証は同じスタックを触るので、実行中は新しい操作を受け付けない。
+  const busy = useAtomValue(actionBusyAtom);
   const [menu, setMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -163,15 +166,21 @@ export function Detail() {
 
       {/* アクション: 検証と操作を左に隣接配置し、右側にプランのラベルを置く */}
       <div className="flex shrink-0 flex-wrap items-center gap-2 px-5 pb-4">
-        <Button variant="primary" icon="play_arrow" onClick={openScheme}>
+        <Button
+          variant="primary"
+          icon="play_arrow"
+          disabled={busy}
+          title={busy ? "他の操作の実行中です" : undefined}
+          onClick={openScheme}
+        >
           検証
         </Button>
         <div className="relative" ref={menuRef}>
           <Button
             variant="default"
-            disabled={!hasMenu}
+            disabled={!hasMenu || busy}
             onClick={() => setMenu((v) => !v)}
-            title={hasMenu ? "その他の操作" : "操作はありません"}
+            title={busy ? "他の操作の実行中です" : hasMenu ? "その他の操作" : "操作はありません"}
           >
             操作
             <Icon name="expand_more" size={16} style={{ opacity: 0.7 }} />

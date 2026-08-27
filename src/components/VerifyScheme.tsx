@@ -1,7 +1,9 @@
+import { useAtomValue } from "jotai";
 import { useState } from "react";
 import { GROUPS } from "../lib/topology";
 import type { VerifyPlan, WorktreeEntry } from "../lib/types";
 import { useApp, type Step } from "../state/app";
+import { actionBusyAtom } from "../state/atoms";
 import { Icon } from "./Icon";
 import { Button, Modal } from "./ui";
 
@@ -114,6 +116,8 @@ export function VerifyScheme({
   onClose: () => void;
 }) {
   const { runScheme } = useApp();
+  // 実行中に別の検証を重ねると同じサービスを同時に recreate してしまう。
+  const busy = useAtomValue(actionBusyAtom);
   const [groups, setGroups] = useState<Set<string>>(new Set(plan.groups));
   const [builds, setBuilds] = useState<Set<string>>(new Set(plan.buildGroups));
   const [fe, setFe] = useState(plan.fe);
@@ -224,13 +228,13 @@ export function VerifyScheme({
 
       <div className="flex items-center justify-between">
         <span className="text-[11px]" style={{ color: "var(--wt-muted)" }}>
-          選択したステップを上から順に実行します
+          {busy ? "他の操作の実行中です" : "選択したステップを上から順に実行します"}
         </span>
         <div className="flex gap-2">
           <Button variant="ghost" onClick={onClose}>
             キャンセル
           </Button>
-          <Button variant="primary" icon="play_arrow" onClick={run} disabled={nothing}>
+          <Button variant="primary" icon="play_arrow" onClick={run} disabled={nothing || busy}>
             実行
           </Button>
         </div>

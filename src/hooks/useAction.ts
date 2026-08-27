@@ -1,5 +1,5 @@
 import { useSetAtom } from "jotai";
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { errorMessage, runAction } from "../lib/ipc";
 import type { Step } from "../state/app";
 import { actionActiveAtom, actionOpenAtom, actionTabsAtom } from "../state/atoms";
@@ -13,10 +13,15 @@ export function useActionRunner(afterDone: () => void) {
   const setOpen = useSetAtom(actionOpenAtom);
   const setTabs = useSetAtom(actionTabsAtom);
   const setActive = useSetAtom(actionActiveAtom);
+  // 実行中フラグは ref で持つ。再レンダリングを待たずに同一 tick の二重呼び出しも弾く。
+  const busyRef = useRef(false);
 
   const runScheme = useCallback(
     async (steps: Step[]): Promise<boolean> => {
       if (steps.length === 0) return true;
+      // ボタンの無効化をすり抜けた経路でも二重実行させない（同じサービスの同時 recreate 防止）。
+      if (busyRef.current) return false;
+      busyRef.current = true;
       setOpen(true);
       // タブは置き換えず upsert する: 別操作（BE 起動と FE 起動など）のログが
       // 後の操作で上書きされないよう、既存タブを残したまま今回のステップを追加/更新する。
@@ -72,6 +77,7 @@ export function useActionRunner(afterDone: () => void) {
 
       const results = await Promise.all([serial, ...spawned]);
       const ok = results.every(Boolean);
+      busyRef.current = false;
       afterDone();
       // 完了して成功したタブは自動で閉じる。実行中でないタブが残っていると
       // 進行中の操作が紛れて分かりにくいため。失敗タブは原因を追えるよう残す。
