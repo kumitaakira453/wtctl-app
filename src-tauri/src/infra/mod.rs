@@ -5,6 +5,7 @@ pub mod fs;
 pub mod gh;
 pub mod git;
 pub mod http;
+pub mod lock;
 pub mod process;
 pub mod shell;
 pub mod state;

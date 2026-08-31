@@ -58,6 +58,9 @@ flowchart LR
 - 読み取り系コマンドはデータを返す。アクション系は `Channel<LogEvent>` で実行ログを 1 行ずつフロントへ流す。
 - git / docker / gh はブロッキングなので `spawn_blocking` でワーカースレッドに逃がし、UI を固まらせない。
 - 現在の mount 状態の真実源は `docker inspect`。`swaps.json` は差し替えの意図の記録に留める。
+- docker compose を叩く操作は `stack.lock` の flock で直列化する。起動と停止が重なると db が
+  exit 0 で落ち、依存コンテナが `dependency failed to start` になるため。FE 起動は docker を
+  触らないのでロック対象外で、BE の差し替えと並行して走る。
 
 ---
 
@@ -104,6 +107,8 @@ npm run tauri:build
 
 - 設定: `$XDG_CONFIG_HOME/wtctl/config.json`（既定 `~/.config/wtctl/config.json`）
 - 状態: `$XDG_STATE_HOME/wtctl`（既定 `~/.local/state/wtctl`）
+  - `stack.lock`: docker 操作の排他ロック。保持プロセスが死ねばカーネルが解放するので、
+    アプリを強制終了してもロックは残らない。
 
 初回起動時にリポジトリ未設定なら設定画面が出る。GUI から設定できるほか、手動でも書ける（[`config.example.json`](config.example.json) 参照）。
 

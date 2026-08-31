@@ -6,6 +6,10 @@ import { actionActiveAtom, actionOpenAtom, actionTabsAtom } from "../state/atoms
 
 /// 成功したタブを畳むまでの猶予。完了したことが目視できる程度に置く。
 const AUTO_CLOSE_MS = 2500;
+/// 保持するログタブの上限。超えたら古い方から間引く。
+const TAB_CAP = 12;
+/// 実行中に弾いたことを伝えるタブ。毎回同じ id で上書きし、増やさない。
+const BLOCKED_TAB = "blocked";
 
 /// 検証スキーム等の複数ステップを順に実行し、各ステップをタブに分けてログを保持する。
 /// 完了後に afterDone（ダッシュボード更新）を呼ぶ。1 ステップ失敗で以降は中断。
@@ -20,18 +24,36 @@ export function useActionRunner(afterDone: () => void) {
     async (steps: Step[]): Promise<boolean> => {
       if (steps.length === 0) return true;
       // ボタンの無効化をすり抜けた経路でも二重実行させない（同じサービスの同時 recreate 防止）。
-      if (busyRef.current) return false;
+      // 黙って捨てると「押しても効かない」と受け取られ、CLI や手動 docker から叩かれて
+      // 起動と停止が重なる。弾いたことは必ずログに出す。
+      if (busyRef.current) {
+        setOpen(true);
+        setTabs((prev) =>
+          [
+            ...prev.filter((t) => t.id !== BLOCKED_TAB),
+            {
+              id: BLOCKED_TAB,
+              title: "受付不可",
+              log: [{ kind: "error" as const, text: "他の操作を実行中です。完了してから再実行してください。" }],
+              running: false,
+              result: "error" as const,
+            },
+          ].slice(-TAB_CAP),
+        );
+        setActive(BLOCKED_TAB);
+        return false;
+      }
       busyRef.current = true;
       setOpen(true);
       // タブは置き換えず upsert する: 別操作（BE 起動と FE 起動など）のログが
       // 後の操作で上書きされないよう、既存タブを残したまま今回のステップを追加/更新する。
-      const CAP = 12;
       setTabs((prev) => {
         const incoming = new Set(steps.map((s) => s.id));
-        const kept = prev.filter((t) => !incoming.has(t.id));
+        // 前回の「受付不可」は、新しい操作が通った時点で用済みなので落とす。
+        const kept = prev.filter((t) => !incoming.has(t.id) && t.id !== BLOCKED_TAB);
         const fresh = steps.map((s) => ({ id: s.id, title: s.title, log: [], running: false, result: null }));
         // 新規タブは末尾。上限超過時は古い（=先頭側）タブから間引く。
-        return [...kept, ...fresh].slice(-CAP);
+        return [...kept, ...fresh].slice(-TAB_CAP);
       });
       const runOne = async (s: Step): Promise<boolean> => {
         setTabs((tabs) => tabs.map((t) => (t.id === s.id ? { ...t, running: true } : t)));

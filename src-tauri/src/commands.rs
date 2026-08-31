@@ -19,7 +19,7 @@ use crate::domain::models::{BranchInfo, PrInfo, VerifyPlan};
 use crate::domain::topology::PROJECT;
 use crate::error::{WtError, WtResult};
 use crate::event::{LogEvent, Sink};
-use crate::infra::config;
+use crate::infra::{config, lock};
 
 /// 実行中の `docker logs -f` プロセス（id -> Child）。タブ切替/閉じるで kill する。
 static LOG_PROCS: LazyLock<Mutex<HashMap<u64, Child>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -40,16 +40,30 @@ where
     .map_err(|e| WtError::new(e.to_string()))?
 }
 
-async fn run_action<F>(channel: Channel<LogEvent>, f: F) -> Result<(), WtError>
+/// action に名前を与えると、docker スタックの排他ロックを取ってから実行する。
+/// 取得できなければ実行せずエラーを返す（他の操作と重ねて compose を叩かない）。
+async fn run_action_with<F>(
+    channel: Channel<LogEvent>,
+    action: Option<&'static str>,
+    f: F,
+) -> Result<(), WtError>
 where
     F: FnOnce(&Ctx, &Sink) -> WtResult<()> + Send + 'static,
 {
     tauri::async_runtime::spawn_blocking(move || {
-        let ctx = Ctx::load()?;
         let sink = move |e: LogEvent| {
             let _ = channel.send(e);
         };
         let s: &Sink = &sink;
+        // ロックはワーカースレッド内で保持し、この関数を抜けた時点で必ず解放する。
+        let _lock = match action.map(lock::acquire).transpose() {
+            Ok(l) => l,
+            Err(e) => {
+                s(LogEvent::error(e.message.clone()));
+                return Err(e);
+            }
+        };
+        let ctx = Ctx::load()?;
         let result = f(&ctx, s);
         if let Err(e) = &result {
             s(LogEvent::error(e.message.clone()));
@@ -58,6 +72,28 @@ where
     })
     .await
     .map_err(|e| WtError::new(e.to_string()))?
+}
+
+/// docker を触らない操作（FE 起動・git のみ）。BE の差し替えと並行して走らせたいので
+/// スタックのロックは取らない。
+async fn run_action<F>(channel: Channel<LogEvent>, f: F) -> Result<(), WtError>
+where
+    F: FnOnce(&Ctx, &Sink) -> WtResult<()> + Send + 'static,
+{
+    run_action_with(channel, None, f).await
+}
+
+/// docker compose を叩く操作。起動と停止が重なると db が落ちて依存コンテナが
+/// 起動できなくなるため、プロセスを跨いで直列化する。
+async fn run_stack_action<F>(
+    action: &'static str,
+    channel: Channel<LogEvent>,
+    f: F,
+) -> Result<(), WtError>
+where
+    F: FnOnce(&Ctx, &Sink) -> WtResult<()> + Send + 'static,
+{
+    run_action_with(channel, Some(action), f).await
 }
 
 // ---------------------------------------------------------------- 設定
@@ -262,7 +298,7 @@ pub fn stop_container_logs(id: u64) {
 
 #[tauri::command]
 pub async fn verify(path: String, channel: Channel<LogEvent>) -> Result<(), WtError> {
-    run_action(channel, move |ctx, sink| {
+    run_stack_action("検証", channel, move |ctx, sink| {
         let plan = query::plan_for(ctx, &path);
         if let Some(err) = plan.error {
             return Err(WtError::new(err));
@@ -279,7 +315,10 @@ pub async fn be_apply(
     build_groups: Vec<String>,
     channel: Channel<LogEvent>,
 ) -> Result<(), WtError> {
-    run_action(channel, move |ctx, sink| verify::be(ctx, &path, &groups, &build_groups, sink)).await
+    run_stack_action("BE 差し替え", channel, move |ctx, sink| {
+        verify::be(ctx, &path, &groups, &build_groups, sink)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -299,12 +338,12 @@ pub async fn fe_main(channel: Channel<LogEvent>) -> Result<(), WtError> {
 
 #[tauri::command]
 pub async fn restore(channel: Channel<LogEvent>) -> Result<(), WtError> {
-    run_action(channel, |ctx, sink| restore::restore(ctx, sink)).await
+    run_stack_action("復帰", channel, |ctx, sink| restore::restore(ctx, sink)).await
 }
 
 #[tauri::command]
 pub async fn restore_be(channel: Channel<LogEvent>) -> Result<(), WtError> {
-    run_action(channel, |ctx, sink| restore::restore_be(ctx, sink)).await
+    run_stack_action("BE 復帰", channel, |ctx, sink| restore::restore_be(ctx, sink)).await
 }
 
 #[tauri::command]
@@ -314,17 +353,17 @@ pub async fn stop_main_fe(channel: Channel<LogEvent>) -> Result<(), WtError> {
 
 #[tauri::command]
 pub async fn stack_start(channel: Channel<LogEvent>) -> Result<(), WtError> {
-    run_action(channel, |ctx, sink| stack::start(ctx, sink)).await
+    run_stack_action("BE 起動", channel, |ctx, sink| stack::start(ctx, sink)).await
 }
 
 #[tauri::command]
 pub async fn stack_stop(channel: Channel<LogEvent>) -> Result<(), WtError> {
-    run_action(channel, |ctx, sink| stack::stop(ctx, sink)).await
+    run_stack_action("BE 停止", channel, |ctx, sink| stack::stop(ctx, sink)).await
 }
 
 #[tauri::command]
 pub async fn health_check(channel: Channel<LogEvent>) -> Result<(), WtError> {
-    run_action(channel, |ctx, sink| health::health(ctx, sink)).await
+    run_stack_action("health", channel, |ctx, sink| health::health(ctx, sink)).await
 }
 
 #[tauri::command]
@@ -334,17 +373,26 @@ pub async fn create_worktree(branch: String, channel: Channel<LogEvent>) -> Resu
 
 #[tauri::command]
 pub async fn delete_worktree(path: String, force: bool, channel: Channel<LogEvent>) -> Result<(), WtError> {
-    run_action(channel, move |ctx, sink| teardown::delete(ctx, &path, force, sink)).await
+    run_stack_action("worktree 削除", channel, move |ctx, sink| {
+        teardown::delete(ctx, &path, force, sink)
+    })
+    .await
 }
 
 #[tauri::command]
 pub async fn teardown_worktree(path: String, force: bool, channel: Channel<LogEvent>) -> Result<(), WtError> {
-    run_action(channel, move |ctx, sink| teardown::teardown(ctx, &path, force, sink)).await
+    run_stack_action("worktree 撤去", channel, move |ctx, sink| {
+        teardown::teardown(ctx, &path, force, sink)
+    })
+    .await
 }
 
 #[tauri::command]
 pub async fn migration_apply_all(groups: Vec<String>, channel: Channel<LogEvent>) -> Result<(), WtError> {
-    run_action(channel, move |ctx, sink| migration::apply_all(ctx, &groups, sink)).await
+    run_stack_action("migration 適用", channel, move |ctx, sink| {
+        migration::apply_all(ctx, &groups, sink)
+    })
+    .await
 }
 
 #[derive(Deserialize)]
@@ -362,7 +410,7 @@ pub async fn migration_rollback_to_base(
     apps: Vec<AppRef>,
     channel: Channel<LogEvent>,
 ) -> Result<(), WtError> {
-    run_action(channel, move |ctx, sink| {
+    run_stack_action("migration 巻き戻し", channel, move |ctx, sink| {
         let tuples: Vec<(String, String, String)> =
             apps.into_iter().map(|a| (a.group, a.app, a.appdir)).collect();
         migration::rollback_to_base(ctx, &worktree, base.as_deref(), &tuples, sink)
