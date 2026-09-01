@@ -9,9 +9,9 @@ import { Badge, Button, Modal, Spinner } from "./ui";
 type SortKey = "recent" | "oldest" | "name";
 
 const SORTS: { key: SortKey; label: string }[] = [
-  { key: "recent", label: "更新が新しい" },
-  { key: "oldest", label: "更新が古い" },
-  { key: "name", label: "名前" },
+  { key: "recent", label: "新しい順" },
+  { key: "oldest", label: "古い順" },
+  { key: "name", label: "名前順" },
 ];
 
 // PR の状態で絞る選択肢。"none" は PR が無いブランチ。
@@ -125,18 +125,29 @@ export function BranchPicker({ onClose }: { onClose: () => void }) {
         ))}
         <div className="ml-auto flex items-center gap-1.5">
           <Icon name="sort" size={14} style={{ color: "var(--wt-muted)" }} />
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            className="rounded-md px-1.5 py-0.5 text-[11px] outline-none"
-            style={{ background: "var(--wt-panel)", border: "1px solid var(--wt-border)", color: "var(--wt-fg-dim)" }}
+          {/* OS 標準の select は見た目が浮くので、フィルタのチップと揃えたセグメントにする */}
+          <div
+            className="flex items-center gap-0.5 rounded-md p-0.5"
+            style={{ border: "1px solid var(--wt-border)", background: "var(--wt-panel)" }}
           >
-            {SORTS.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+            {SORTS.map((s) => {
+              const on = sort === s.key;
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setSort(s.key)}
+                  className="rounded px-2 py-0.5 text-[11px] font-medium transition-colors"
+                  style={{
+                    color: on ? "var(--wt-accent)" : "var(--wt-muted)",
+                    background: on ? "var(--wt-accent-soft)" : "transparent",
+                  }}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
