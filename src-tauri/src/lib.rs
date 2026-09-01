@@ -72,6 +72,7 @@ pub fn run() {
             commands::disk_size,
             commands::is_dirty,
             commands::migration_show,
+            commands::migration_applied,
             commands::commit_log,
             commands::commit_files,
             commands::commit_diff,

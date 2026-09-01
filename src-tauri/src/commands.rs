@@ -210,6 +210,23 @@ pub async fn is_dirty(path: String) -> Result<bool, WtError> {
     run_query(move |ctx| Ok(query::is_dirty(ctx, &path))).await
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MigAppRef {
+    group: String,
+    app: String,
+}
+
+/// 指定 app 群のうち DB に適用済みの migration label を返す（検証スキームの既定選択に使う）。
+#[tauri::command]
+pub async fn migration_applied(apps: Vec<MigAppRef>) -> Result<Vec<String>, WtError> {
+    run_query(move |ctx| {
+        let pairs: Vec<(String, String)> = apps.into_iter().map(|a| (a.group, a.app)).collect();
+        migration::applied(ctx, &pairs)
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn migration_show(group: String, app: String) -> Result<String, WtError> {
     run_query(move |ctx| migration::show(ctx, &group, &app)).await

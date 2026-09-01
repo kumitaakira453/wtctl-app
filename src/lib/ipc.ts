@@ -39,6 +39,8 @@ export const api = {
     invoke<FileChange[]>("commit_files", { path, sha }),
   commitDiff: (path: string, sha: string, file: string, context: number) =>
     invoke<string>("commit_diff", { path, sha, file, context }),
+  migrationApplied: (apps: { group: string; app: string }[]) =>
+    invoke<string[]>("migration_applied", { apps }),
   claudeSessions: (path: string) => invoke<ClaudeSession[]>("claude_sessions", { path }),
   claudeTranscript: (path: string, session: string) =>
     invoke<ClaudeMessage[]>("claude_transcript", { path, session }),
