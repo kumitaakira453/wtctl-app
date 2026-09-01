@@ -7,7 +7,7 @@ import type { VerifyPlan, WorktreeEntry } from "../lib/types";
 import { useApp, type Step } from "../state/app";
 import { actionBusyAtom, mountsAtom, vitesAtom } from "../state/atoms";
 import { Icon } from "./Icon";
-import { Button, Modal } from "./ui";
+import { Badge, Button, Modal } from "./ui";
 
 function CheckBox({ on }: { on: boolean }) {
   return (
@@ -29,6 +29,7 @@ function Row({
   onToggle,
   label,
   sub,
+  chips,
   disabled,
   trailing,
   children,
@@ -37,6 +38,7 @@ function Row({
   onToggle: () => void;
   label: string;
   sub?: string;
+  chips?: React.ReactNode;
   disabled?: boolean;
   trailing?: React.ReactNode;
   children?: React.ReactNode;
@@ -57,9 +59,10 @@ function Row({
         style={{ cursor: disabled ? "default" : "pointer" }}
       >
         <CheckBox on={on} />
-        <span className="min-w-0 flex-1 truncate">
-          <span className="text-[13px] font-medium">{label}</span>
-          {sub && <span className="ml-2 text-[11px]" style={{ color: "var(--wt-muted)" }}>{sub}</span>}
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="shrink-0 text-[13px] font-medium">{label}</span>
+          {chips}
+          {sub && <span className="truncate text-[11px]" style={{ color: "var(--wt-muted)" }}>{sub}</span>}
         </span>
         {trailing}
       </div>
@@ -192,8 +195,15 @@ export function VerifyScheme({
       : applied === null
         ? "適用状況を確認中…"
         : pending.length === 0
-          ? `${plan.migrations.length} 件すべて適用済み`
-          : `${pending.length} 件（${migGroups.join(", ")}）${doneCount > 0 ? ` · 適用済み ${doneCount} 件` : ""}`;
+          ? undefined
+          : `${pending.length} 件（${migGroups.join(", ")}）`;
+
+  const migrationChip =
+    plan.migrations.length === 0 || applied === null ? undefined : pending.length === 0 ? (
+      <Badge color="var(--wt-ok)" soft>適用済み {plan.migrations.length} 件</Badge>
+    ) : doneCount > 0 ? (
+      <Badge color="var(--wt-muted)" soft>適用済み {doneCount} 件</Badge>
+    ) : undefined;
 
   const toggle = (set: Set<string>, key: string) => {
     const next = new Set(set);
@@ -236,20 +246,19 @@ export function VerifyScheme({
             const on = groups.has(g.key);
             const inDiff = plan.groups.includes(g.key);
             const done = swapped.has(g.key);
-            const sub = done
-              ? inDiff
-                ? "差分あり · この worktree に差し替え済み"
-                : "この worktree に差し替え済み"
-              : inDiff
-                ? "差分あり"
-                : g.services.join(", ");
             return (
               <Row
                 key={g.key}
                 on={on}
                 onToggle={() => setGroups((s) => toggle(s, g.key))}
                 label={g.key}
-                sub={sub}
+                chips={
+                  <>
+                    {inDiff && <Badge color="var(--wt-warn)" soft>差分あり</Badge>}
+                    {done && <Badge color="var(--wt-ok)" soft>差し替え済み</Badge>}
+                  </>
+                }
+                sub={inDiff || done ? undefined : g.services.join(", ")}
                 trailing={
                   <button
                     type="button"
@@ -285,13 +294,15 @@ export function VerifyScheme({
             on={fe}
             onToggle={() => setFe((v) => !v)}
             label="FE を起動"
-            sub={feRunning ? ":3000 で Vite · この worktree で起動済み" : ":3000 で Vite"}
+            chips={feRunning ? <Badge color="var(--wt-ok)" soft>起動済み</Badge> : undefined}
+            sub=":3000 で Vite"
           />
           <Row
             on={migration}
             onToggle={() => setMigration((v) => !v)}
             disabled={plan.migrations.length === 0 || pending.length === 0}
             label="migration を適用"
+            chips={migrationChip}
             sub={migrationSub}
           >
             {plan.migrations.length > 0 && (
