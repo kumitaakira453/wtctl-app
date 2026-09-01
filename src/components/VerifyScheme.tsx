@@ -1,6 +1,5 @@
 import { useAtomValue } from "jotai";
-import { useEffect, useState } from "react";
-import { api } from "../lib/ipc";
+import { useState } from "react";
 import { feActiveFor, samePath } from "../lib/status";
 import { GROUPS } from "../lib/topology";
 import type { VerifyPlan, WorktreeEntry } from "../lib/types";
@@ -72,15 +71,9 @@ function Row({
 }
 
 /// migration を group/app ごとにまとめたツリー表示。各 app の適用件数も示す。
-function MigrationTree({
-  migrations,
-  applied,
-}: {
-  migrations: { group: string; app: string; name: string; label: string }[];
-  applied: Set<string>;
-}) {
+function MigrationTree({ migrations }: { migrations: { group: string; app: string; name: string; label: string }[] }) {
   // 表示順を保ったまま group/app でまとめる
-  const tree: { key: string; group: string; app: string; names: { name: string; done: boolean }[] }[] = [];
+  const tree: { key: string; group: string; app: string; names: string[] }[] = [];
   for (const m of migrations) {
     const key = `${m.group}/${m.app}`;
     let node = tree.find((t) => t.key === key);
@@ -88,7 +81,7 @@ function MigrationTree({
       node = { key, group: m.group, app: m.app, names: [] };
       tree.push(node);
     }
-    node.names.push({ name: m.name, done: applied.has(m.label) });
+    node.names.push(m.name);
   }
   return (
     <div className="flex flex-col gap-1.5">
@@ -102,21 +95,11 @@ function MigrationTree({
             <span style={{ color: "var(--wt-muted)" }}>({node.names.length})</span>
           </div>
           <div className="ml-2 flex flex-col gap-0.5 pl-2" style={{ borderLeft: "1px solid var(--wt-border)" }}>
-            {node.names.map((n, i) => (
-              <div key={n.name} className="flex items-center gap-1.5 font-mono text-[11px]">
+            {node.names.map((name, i) => (
+              <div key={name} className="flex items-center gap-1.5 font-mono text-[11px]">
                 <span style={{ color: "var(--wt-muted)", opacity: 0.6 }}>{i + 1}.</span>
-                <Icon
-                  name={n.done ? "check" : "arrow_upward"}
-                  size={11}
-                  style={{ color: n.done ? "var(--wt-muted)" : "var(--wt-ok)" }}
-                />
-                <span
-                  className="truncate"
-                  style={{ color: n.done ? "var(--wt-muted)" : "var(--wt-fg-dim)" }}
-                >
-                  {n.name}
-                </span>
-                {n.done && <span style={{ color: "var(--wt-muted)" }}>適用済み</span>}
+                <Icon name="arrow_upward" size={11} style={{ color: "var(--wt-ok)" }} />
+                <span className="truncate" style={{ color: "var(--wt-fg-dim)" }}>{name}</span>
               </div>
             ))}
           </div>
@@ -156,54 +139,14 @@ export function VerifyScheme({
   const [groups, setGroups] = useState<Set<string>>(() => new Set(plan.groups.filter((g) => !swapped.has(g))));
   const [builds, setBuilds] = useState<Set<string>>(new Set(plan.buildGroups));
   const [fe, setFe] = useState(plan.fe && !feRunning);
+  // migrate は適用済みを再実行しても何も起きないので、事前の適用状況チェックはしない
+  // （showmigrations を待つと開くたびに数秒かかる）。
   const [migration, setMigration] = useState(plan.migrations.length > 0);
 
-  // 適用済み migration は showmigrations で判定する（差し替え前は判定できず未適用扱い）。
-  const [applied, setApplied] = useState<Set<string> | null>(null);
-  useEffect(() => {
-    if (plan.migrations.length === 0) {
-      setApplied(new Set());
-      return;
-    }
-    let alive = true;
-    const apps = Array.from(new Map(plan.migrations.map((m) => [`${m.group}/${m.app}`, m])).values()).map((m) => ({
-      group: m.group,
-      app: m.app,
-    }));
-    api
-      .migrationApplied(apps)
-      .then((labels) => alive && setApplied(new Set(labels)))
-      .catch(() => alive && setApplied(new Set()));
-    return () => {
-      alive = false;
-    };
-  }, [plan]);
-
-  const pending = plan.migrations.filter((m) => !applied?.has(m.label));
-  const doneCount = plan.migrations.length - pending.length;
-  // 判定が届いた時点で既定を決める。以降はユーザーの選択を上書きしない。
-  useEffect(() => {
-    if (applied) setMigration(pending.length > 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [applied]);
-
-  const migGroups = Array.from(new Set(pending.map((m) => m.group)));
+  const migGroups = Array.from(new Set(plan.migrations.map((m) => m.group)));
 
   const migrationSub =
-    plan.migrations.length === 0
-      ? "新規 migration なし"
-      : applied === null
-        ? "適用状況を確認中…"
-        : pending.length === 0
-          ? undefined
-          : `${pending.length} 件（${migGroups.join(", ")}）`;
-
-  const migrationChip =
-    plan.migrations.length === 0 || applied === null ? undefined : pending.length === 0 ? (
-      <Badge color="var(--wt-ok)" soft>適用済み {plan.migrations.length} 件</Badge>
-    ) : doneCount > 0 ? (
-      <Badge color="var(--wt-muted)" soft>適用済み {doneCount} 件</Badge>
-    ) : undefined;
+    plan.migrations.length === 0 ? "新規 migration なし" : `${plan.migrations.length} 件（${migGroups.join(", ")}）`;
 
   const toggle = (set: Set<string>, key: string) => {
     const next = new Set(set);
@@ -300,31 +243,19 @@ export function VerifyScheme({
           <Row
             on={migration}
             onToggle={() => setMigration((v) => !v)}
-            disabled={plan.migrations.length === 0 || pending.length === 0}
+            disabled={plan.migrations.length === 0}
             label="migration を適用"
-            chips={migrationChip}
             sub={migrationSub}
           >
-            {plan.migrations.length > 0 && (
+            {migration && plan.migrations.length > 0 && (
               <div className="px-3 pb-2" style={{ borderTop: "1px solid var(--wt-border)" }}>
                 <div className="mt-2 mb-1.5 flex items-center gap-1.5 text-[11px]">
-                  <Icon
-                    name={pending.length > 0 ? "arrow_upward" : "check"}
-                    size={13}
-                    style={{ color: pending.length > 0 ? "var(--wt-ok)" : "var(--wt-muted)" }}
-                  />
+                  <Icon name="arrow_upward" size={13} style={{ color: "var(--wt-ok)" }} />
                   <span style={{ color: "var(--wt-fg-dim)" }}>
-                    {pending.length > 0 ? (
-                      <>
-                        <b>{pending.length}</b> 件を適用（進める）
-                        {doneCount > 0 && <span style={{ color: "var(--wt-muted)" }}> · {doneCount} 件は適用済み</span>}
-                      </>
-                    ) : (
-                      <span style={{ color: "var(--wt-muted)" }}>すべて適用済みのため実行しません</span>
-                    )}
+                    <b>{plan.migrations.length}</b> 件を適用（進める）
                   </span>
                 </div>
-                <MigrationTree migrations={plan.migrations} applied={applied ?? new Set()} />
+                <MigrationTree migrations={plan.migrations} />
               </div>
             )}
           </Row>

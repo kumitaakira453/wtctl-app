@@ -69,31 +69,3 @@ pub fn rollback_to_base(
 pub fn show(ctx: &Ctx, group_key: &str, app: &str) -> WtResult<String> {
     Ok(ctx.docker.showmigrations(container(group_key)?, app))
 }
-
-/// 指定 migration のうち、DB に適用済みのものの label を返す。
-/// showmigrations の `[X] name` を適用済みとみなす。コンテナ停止時は空になり、
-/// 「未適用」として扱われる（差し替え前は判定できないため安全側）。
-pub fn applied(ctx: &Ctx, apps: &[(String, String)]) -> WtResult<Vec<String>> {
-    let mut done: Vec<String> = Vec::new();
-    // 同じ (group, app) で showmigrations を何度も叩かないようまとめる
-    let mut seen: Vec<(String, String)> = Vec::new();
-    for (grp, app) in apps {
-        if seen.iter().any(|(g, a)| g == grp && a == app) {
-            continue;
-        }
-        seen.push((grp.clone(), app.clone()));
-        let out = ctx.docker.showmigrations(container(grp)?, app);
-        for line in out.lines() {
-            let t = line.trim();
-            let name = match t.strip_prefix("[X]") {
-                Some(rest) => rest.trim(),
-                None => continue,
-            };
-            if name.is_empty() {
-                continue;
-            }
-            done.push(format!("{grp}/{app}:{name}"));
-        }
-    }
-    Ok(done)
-}
