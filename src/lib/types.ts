@@ -172,6 +172,9 @@ export interface RepoStatus {
   error: string | null;
 }
 
+/// 操作が触る資源。BE（docker compose）と FE（Vite）は独立なので別枠で排他する。
+export type ActionScope = "be" | "fe" | "other";
+
 export type LogKind = "cmd" | "out" | "info" | "success" | "warn" | "error";
 
 export interface LogEvent {

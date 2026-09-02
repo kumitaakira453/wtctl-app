@@ -1,6 +1,7 @@
 import { atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import type {
+  ActionScope,
   LogEvent,
   MainFe,
   MetaEntry,
@@ -124,11 +125,16 @@ export interface ActionTab {
   log: LogEvent[];
   running: boolean;
   result: "ok" | "error" | null;
+  scope: ActionScope;
 }
 export const actionOpenAtom = atom(false);
 export const actionTabsAtom = atom<ActionTab[]>([]);
 export const actionActiveAtom = atom<string>("");
 
-/// 実行中の操作があるか。起動・停止・検証は同じスタックを触るので、
-/// 実行中は他の操作を受け付けないための排他に使う。
+/// BE 起動中に FE を起動できてしまうと同じ資源を同時に触るので、資源ごとに排他する。
+/// FE（Vite）と BE（docker compose）は独立なので互いを止めない。
+export const beBusyAtom = atom((get) => get(actionTabsAtom).some((t) => t.running && t.scope === "be"));
+export const feBusyAtom = atom((get) => get(actionTabsAtom).some((t) => t.running && t.scope === "fe"));
+
+/// 何かしら実行中か。BE と FE の両方を含む検証や worktree 操作の可否に使う。
 export const actionBusyAtom = atom((get) => get(actionTabsAtom).some((t) => t.running));

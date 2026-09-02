@@ -1,7 +1,7 @@
 import { useSetAtom } from "jotai";
 import { useCallback, useRef } from "react";
 import { errorMessage, runAction } from "../lib/ipc";
-import type { Step } from "../state/app";
+import { scopeOf, type Step } from "../state/app";
 import { actionActiveAtom, actionOpenAtom, actionTabsAtom } from "../state/atoms";
 
 /// 成功したタブを畳むまでの猶予。完了したことが目視できる程度に置く。
@@ -17,8 +17,9 @@ export function useActionRunner(afterDone: () => void) {
   const setOpen = useSetAtom(actionOpenAtom);
   const setTabs = useSetAtom(actionTabsAtom);
   const setActive = useSetAtom(actionActiveAtom);
-  // 実行中フラグは ref で持つ。再レンダリングを待たずに同一 tick の二重呼び出しも弾く。
-  const busyRef = useRef(false);
+  // 実行中の資源は ref で持つ。再レンダリングを待たずに同一 tick の二重呼び出しも弾く。
+  // 資源ごとに分けるので、BE の起動停止は FE の起動中でも通る。
+  const busyScopes = useRef<Set<string>>(new Set());
 
   const runScheme = useCallback(
     async (steps: Step[]): Promise<boolean> => {
@@ -26,7 +27,8 @@ export function useActionRunner(afterDone: () => void) {
       // ボタンの無効化をすり抜けた経路でも二重実行させない（同じサービスの同時 recreate 防止）。
       // 黙って捨てると「押しても効かない」と受け取られ、CLI や手動 docker から叩かれて
       // 起動と停止が重なる。弾いたことは必ずログに出す。
-      if (busyRef.current) {
+      const scopes = new Set(steps.map((st) => scopeOf(st.cmd)));
+      if ([...scopes].some((sc) => busyScopes.current.has(sc))) {
         setOpen(true);
         setTabs((prev) =>
           [
@@ -34,16 +36,17 @@ export function useActionRunner(afterDone: () => void) {
             {
               id: BLOCKED_TAB,
               title: "受付不可",
-              log: [{ kind: "error" as const, text: "他の操作を実行中です。完了してから再実行してください。" }],
+              log: [{ kind: "error" as const, text: "同じ対象の操作を実行中です。完了してから再実行してください。" }],
               running: false,
               result: "error" as const,
+              scope: "other" as const,
             },
           ].slice(-TAB_CAP),
         );
         setActive(BLOCKED_TAB);
         return false;
       }
-      busyRef.current = true;
+      for (const sc of scopes) busyScopes.current.add(sc);
       setOpen(true);
       // タブは置き換えず upsert する: 別操作（BE 起動と FE 起動など）のログが
       // 後の操作で上書きされないよう、既存タブを残したまま今回のステップを追加/更新する。
@@ -51,7 +54,14 @@ export function useActionRunner(afterDone: () => void) {
         const incoming = new Set(steps.map((s) => s.id));
         // 前回の「受付不可」は、新しい操作が通った時点で用済みなので落とす。
         const kept = prev.filter((t) => !incoming.has(t.id) && t.id !== BLOCKED_TAB);
-        const fresh = steps.map((s) => ({ id: s.id, title: s.title, log: [], running: false, result: null }));
+        const fresh = steps.map((s) => ({
+          id: s.id,
+          title: s.title,
+          log: [],
+          running: false,
+          result: null,
+          scope: scopeOf(s.cmd),
+        }));
         // 新規タブは末尾。上限超過時は古い（=先頭側）タブから間引く。
         return [...kept, ...fresh].slice(-TAB_CAP);
       });
@@ -99,7 +109,7 @@ export function useActionRunner(afterDone: () => void) {
 
       const results = await Promise.all([serial, ...spawned]);
       const ok = results.every(Boolean);
-      busyRef.current = false;
+      for (const sc of scopes) busyScopes.current.delete(sc);
       afterDone();
       // 完了して成功したタブは自動で閉じる。実行中でないタブが残っていると
       // 進行中の操作が紛れて分かりにくいため。失敗タブは原因を追えるよう残す。

@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { useConfirm } from "../hooks/useConfirm";
 import { useApp } from "../state/app";
 import {
-  actionBusyAtom,
+  beBusyAtom,
+  feBusyAtom,
   loadingAtom,
   mainFeAtom,
   mainFePortAtom,
@@ -95,7 +96,7 @@ export function TopBar() {
   const { run, refresh } = useApp();
   const confirm = useConfirm();
   // 起動・停止・検証・health は同じスタックを触るので、実行中は互いに受け付けない。
-  const busy = useAtomValue(actionBusyAtom);
+  const beBusy = useAtomValue(beBusyAtom);
 
   // スタック詳細（BE コンテナ一覧）はツールバーから popover で開く
   const [stackPop, setStackPop] = useState(false);
@@ -156,6 +157,7 @@ export function TopBar() {
             }}
             startTitle="BE 起動"
             stopTitle="BE 停止（stop のみ）"
+            scope="be"
           />
         </div>
         {stackPop && (
@@ -185,6 +187,7 @@ export function TopBar() {
           }}
           startTitle={`FE を :${port} で起動（main）`}
           stopTitle={`FE（:${port}）を停止`}
+          scope="fe"
         />
       </div>
 
@@ -192,8 +195,8 @@ export function TopBar() {
         {loading && <Spinner size={14} />}
         <IconButton
           icon="health_and_safety"
-          disabled={busy}
-          title={busy ? "他の操作の実行中です" : "health（停止/差し替え崩れを自動復旧）"}
+          disabled={beBusy}
+          title={beBusy ? "BE の操作を実行中です" : "health（停止/差し替え崩れを自動復旧）"}
           onClick={() => run("health", "health_check", {})}
         />
         <IconButton icon="refresh" title="再読み込み" onClick={() => void refresh()} />
@@ -216,17 +219,21 @@ function StackToggle({
   onStop,
   startTitle,
   stopTitle,
+  scope,
 }: {
   up: boolean;
   onStart: () => void | Promise<unknown>;
   onStop: () => void | Promise<unknown>;
   startTitle: string;
   stopTitle: string;
+  scope: "be" | "fe";
 }) {
   const [busy, setBusy] = useState(false);
   // 自分が実行中でなくても、他の操作（別サービスの起動停止・検証）が走っている間は
   // 同じスタックを触るため受け付けない。
-  const otherBusy = useAtomValue(actionBusyAtom);
+  // 見るのは自分が触る資源だけ。BE の起動停止は FE の起動中でも通すべきなので、
+  // 全体の実行中フラグでは判断しない。
+  const otherBusy = useAtomValue(scope === "be" ? beBusyAtom : feBusyAtom);
   const go = async (fn: () => void | Promise<unknown>) => {
     if (busy || otherBusy) return;
     setBusy(true);
@@ -249,7 +256,7 @@ function StackToggle({
       size={15}
       box={26}
       disabled={otherBusy}
-      title={otherBusy ? "他の操作の実行中です" : stopTitle}
+      title={otherBusy ? `${scope.toUpperCase()} の操作を実行中です` : stopTitle}
       onClick={() => go(onStop)}
     />
   ) : (
@@ -258,7 +265,7 @@ function StackToggle({
       size={15}
       box={26}
       disabled={otherBusy}
-      title={otherBusy ? "他の操作の実行中です" : startTitle}
+      title={otherBusy ? `${scope.toUpperCase()} の操作を実行中です` : startTitle}
       onClick={() => go(onStart)}
     />
   );

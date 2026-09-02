@@ -1,4 +1,28 @@
 import { createContext, useContext } from "react";
+import type { ActionScope } from "../lib/types";
+
+// backend のロック有無と対応させる（"be" = run_stack_action を使うコマンド、
+// "fe" = Vite プロセス、"other" = git 等のどちらにも属さない操作）。
+const FE_CMDS = new Set(["fe", "fe_main", "stop_main_fe"]);
+const BE_CMDS = new Set([
+  "verify",
+  "be_apply",
+  "restore",
+  "restore_be",
+  "stack_start",
+  "stack_stop",
+  "health_check",
+  "delete_worktree",
+  "teardown_worktree",
+  "migration_apply_all",
+  "migration_rollback_to_base",
+]);
+
+export function scopeOf(cmd: string): ActionScope {
+  if (FE_CMDS.has(cmd)) return "fe";
+  if (BE_CMDS.has(cmd)) return "be";
+  return "other";
+}
 
 export interface Step {
   id: string;
