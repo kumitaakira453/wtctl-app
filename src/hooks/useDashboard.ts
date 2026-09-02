@@ -1,3 +1,5 @@
+import type { UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useAtom, useSetAtom } from "jotai";
 import { useCallback, useEffect, useRef } from "react";
 import { api, errorMessage } from "../lib/ipc";
@@ -17,6 +19,9 @@ import {
 } from "../state/atoms";
 
 /// ダッシュボードのデータ読み込みと定期更新を司る。
+// ウィンドウ復帰の連打で取り直しを繰り返さないための最小間隔。
+const FOCUS_REFRESH_MIN_MS = 10000;
+
 export function useDashboard(enabled: boolean) {
   const setWorktrees = useSetAtom(worktreesAtom);
   const setMainPath = useSetAtom(mainPathAtom);
@@ -98,6 +103,32 @@ export function useDashboard(enabled: boolean) {
     const id = setInterval(() => void refreshLive(), 15000);
     return () => clearInterval(id);
   }, [enabled, refresh, refreshLive]);
+
+  // ウィンドウに戻ったとき取り直す。裏に回っている間にブランチや docker の状態が
+  // 変わっているのが普通なので、戻った時点の表示を信じられるようにする。
+  // 戻る操作は連続しがちなので、短い間隔での再取得は間引く。
+  useEffect(() => {
+    if (!enabled) return;
+    let last = 0;
+    let unlisten: UnlistenFn | undefined;
+    let disposed = false;
+    void getCurrentWindow()
+      .onFocusChanged(({ payload: focused }) => {
+        if (!focused) return;
+        const now = Date.now();
+        if (now - last < FOCUS_REFRESH_MIN_MS) return;
+        last = now;
+        void refresh();
+      })
+      .then((un) => {
+        if (disposed) un();
+        else unlisten = un;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [enabled, refresh]);
 
   return { refresh, refreshLive, ensureDisk };
 }
