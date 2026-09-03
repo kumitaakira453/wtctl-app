@@ -1,7 +1,7 @@
 {
   "name": "wtctl-app",
   "private": true,
-  "version": "0.1.50",
+  "version": "0.1.51",
   "type": "module",
   "description": "wasurenai の git worktree を Docker スタックに差し替えて動作確認するデスクトップアプリ（wtctl の GUI 版）。",
   "scripts": {

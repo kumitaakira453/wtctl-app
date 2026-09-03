@@ -1,9 +1,9 @@
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { langForPath } from "../lib/highlight";
 import { api } from "../lib/ipc";
 import type { CommitInfo, FileChange } from "../lib/types";
-import { browserCommitsWAtom, browserTreeWAtom } from "../state/atoms";
+import { browserCommitsWAtom, browserTreeWAtom, dataNonceAtom } from "../state/atoms";
 import { DiffView } from "./DiffView";
 import { FileTree } from "./FileTree";
 import { Spinner } from "./ui";
@@ -68,6 +68,7 @@ function Resizer({ onResize }: { onResize: (dx: number) => void }) {
 /// GitHub / ChatGPT デスクトップ風: コミット一覧 → コミット詳細 → ファイルツリー → 色付き diff。
 /// 各カラム幅はドラッグで可変（永続化）。
 export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean }) {
+  const nonce = useAtomValue(dataNonceAtom);
   const [commitsW, setCommitsW] = useAtom(browserCommitsWAtom);
   const [treeW, setTreeW] = useAtom(browserTreeWAtom);
   const [commits, setCommits] = useState<CommitInfo[] | null>(null);
@@ -140,6 +141,50 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
       alive = false;
     };
   }, [path, sha]);
+
+  // 取り直しの合図が来たら、見ている位置を保ったまま中身を更新する。
+  // 同じ worktree を開いたままだと上の effect は再実行されず、新しいコミットや
+  // 作業ツリーの変更に追従できないため。
+  const shaRef = useRef(sha);
+  shaRef.current = sha;
+  const fileRef = useRef(file);
+  fileRef.current = file;
+  const ctxRef = useRef(ctxLines);
+  ctxRef.current = ctxLines;
+  const seenNonce = useRef(nonce);
+
+  useEffect(() => {
+    if (seenNonce.current === nonce) return; // マウント直後は上の effect が取る
+    seenNonce.current = nonce;
+    let alive = true;
+    void (async () => {
+      const log = await api.commitLog(path);
+      if (!alive) return;
+      const list = dirty ? [WORKING, ...log] : log;
+      setCommits(list);
+      const keep = shaRef.current && list.some((c) => c.sha === shaRef.current);
+      const nextSha = keep ? shaRef.current : (list[0]?.sha ?? null);
+      if (nextSha !== shaRef.current) {
+        setSha(nextSha); // 選択が変わるときは既存の effect が続きを取る
+        return;
+      }
+      if (!nextSha) return;
+      const fs = await api.commitFiles(path, nextSha);
+      if (!alive) return;
+      setFiles(fs);
+      const nextFile = fileRef.current && fs.some((f) => f.path === fileRef.current) ? fileRef.current : (fs[0]?.path ?? null);
+      setFile(nextFile);
+      if (!nextFile) {
+        setDiff("");
+        return;
+      }
+      const d = await api.commitDiff(path, nextSha, nextFile, ctxRef.current);
+      if (alive) setDiff(d);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [nonce, path, dirty]);
 
   useEffect(() => {
     if (!sha || !file) {

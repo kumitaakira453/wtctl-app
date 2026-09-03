@@ -127,6 +127,10 @@ export interface ActionTab {
   result: "ok" | "error" | null;
   scope: ActionScope;
 }
+/// 取り直しが走るたびに増える。画面が自前で持っているデータ（差分タブのコミット一覧など）に
+/// 更新の合図を配るために使う。
+export const dataNonceAtom = atom(0);
+
 export const actionOpenAtom = atom(false);
 export const actionTabsAtom = atom<ActionTab[]>([]);
 export const actionActiveAtom = atom<string>("");

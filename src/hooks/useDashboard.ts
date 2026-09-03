@@ -4,6 +4,7 @@ import { useAtom, useSetAtom } from "jotai";
 import { useCallback, useEffect, useRef } from "react";
 import { api, errorMessage } from "../lib/ipc";
 import {
+  dataNonceAtom,
   disksAtom,
   loadingAtom,
   mainFeAtom,
@@ -35,6 +36,7 @@ export function useDashboard(enabled: boolean) {
   const [disks, setDisks] = useAtom(disksAtom);
   const [selected, setSelected] = useAtom(selectedPathAtom);
   const setLoading = useSetAtom(loadingAtom);
+  const setDataNonce = useSetAtom(dataNonceAtom);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
   const disksRef = useRef(disks);
@@ -78,12 +80,14 @@ export function useDashboard(enabled: boolean) {
         .catch(() => {});
       // (4) PR はバックグラウンドで
       api.getPullRequests().then(setPrs).catch(() => {});
+      // 自前でデータを持つ画面にも取り直しを伝える
+      setDataNonce((n) => n + 1);
     } catch (e) {
       console.error(errorMessage(e));
     } finally {
       setLoading(false);
     }
-  }, [refreshLive, setLoading, setMainPath, setMetas, setPrs, setSelected, setWorktrees]);
+  }, [refreshLive, setDataNonce, setLoading, setMainPath, setMetas, setPrs, setSelected, setWorktrees]);
 
   const ensureDisk = useCallback(
     (path: string) => {
