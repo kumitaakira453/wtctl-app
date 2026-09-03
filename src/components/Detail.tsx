@@ -132,9 +132,10 @@ export function Detail() {
           <span>· {formatSize(disks[path])}</span>
           {meta && !meta.hasUpstream && <Badge color="var(--wt-accent2, #a78bfa)">未 push</Badge>}
         </div>
-        {meta?.subject && (
+        {/* PR があればその題名を出す。直前のコミット件名より作業の意図が分かる。 */}
+        {(pr?.title || meta?.subject) && (
           <div className="mt-1 truncate text-[13px]" style={{ color: "var(--wt-fg-dim)" }}>
-            {meta.subject}
+            {pr?.title ?? meta?.subject}
           </div>
         )}
         {/* この worktree 固有の稼働状況（タブで変わる） */}

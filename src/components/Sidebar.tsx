@@ -171,9 +171,9 @@ export function Sidebar({ onNew, onSettings }: { onNew: () => void; onSettings: 
                   )}
                 </div>
               </div>
-              {/* 直前のコミット件名 */}
+              {/* PR があればその題名、無ければ直前のコミット件名 */}
               <div className="mt-0.5 truncate text-[11px]" style={{ color: "var(--wt-fg-dim)" }}>
-                {meta?.subject || "—"}
+                {pr?.title || meta?.subject || "—"}
               </div>
               {/* ブランチ + 相対時刻 */}
               <div className="mt-0.5 flex items-center gap-2">
@@ -185,7 +185,7 @@ export function Sidebar({ onNew, onSettings }: { onNew: () => void; onSettings: 
                   {meta?.commitRel ?? ""}
                 </span>
               </div>
-              {/* PR ステータス + タイトル */}
+              {/* PR ステータス。題名は上の説明行に出しているので繰り返さない。 */}
               {pr && (
                 <div className="mt-1 flex items-center gap-1.5">
                   <span
@@ -196,9 +196,6 @@ export function Sidebar({ onNew, onSettings }: { onNew: () => void; onSettings: 
                   </span>
                   <span className="shrink-0 text-[10px] font-semibold" style={{ color: PR_COLOR[pr.state] }}>
                     #{pr.number}
-                  </span>
-                  <span className="truncate text-[10px]" style={{ color: "var(--wt-muted)" }}>
-                    {pr.title}
                   </span>
                 </div>
               )}
