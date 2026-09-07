@@ -1,5 +1,6 @@
 import { useAtomValue } from "jotai";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "../lib/ipc";
 import { feActiveFor, samePath } from "../lib/status";
 import { GROUPS } from "../lib/topology";
 import type { VerifyPlan, WorktreeEntry } from "../lib/types";
@@ -128,6 +129,19 @@ export function VerifyScheme({
   // migrate は適用済みを再実行しても何も起きないので、事前の適用状況チェックはしない
   // （showmigrations を待つと開くたびに数秒かかる）。
   const [migration, setMigration] = useState(plan.migrations.length > 0);
+  // venv は流用が効いていると作り直されない。合わなくなったときに手で作り直せるようにする。
+  const [renewVenv, setRenewVenv] = useState(false);
+  const [reuseVenv, setReuseVenv] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api
+      .getConfig()
+      .then((c) => alive && setReuseVenv(c.reuseVenv))
+      .catch(() => alive && setReuseVenv(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const migGroups = Array.from(new Set(plan.migrations.map((m) => m.group)));
 
@@ -152,7 +166,12 @@ export function VerifyScheme({
         id: "be",
         title: "BE 差し替え",
         cmd: "be_apply",
-        args: { path: worktree.path, groups: [...groups], buildGroups: [...builds].filter((g) => groups.has(g)) },
+        args: {
+          path: worktree.path,
+          groups: [...groups],
+          buildGroups: [...builds].filter((g) => groups.has(g)),
+          renewVenv,
+        },
       });
     }
     if (migration && migGroups.length > 0) {
@@ -167,8 +186,33 @@ export function VerifyScheme({
   return (
     <Modal title={`検証スキーム — ${worktree.name}`} onClose={onClose} width={560}>
       <div className="mb-4">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--wt-muted)" }}>
-          BE 差し替え
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--wt-muted)" }}>
+            BE 差し替え
+          </span>
+          {/* `-V` は「その差し替え 1 回・対象サービス全部」に効くので、
+              グループ単位の build とは別にここへ置く */}
+          <button
+            type="button"
+            disabled={reuseVenv === false}
+            onClick={() => setRenewVenv((v) => !v)}
+            className="rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors"
+            style={{
+              color: renewVenv || reuseVenv === false ? "var(--wt-warn)" : "var(--wt-muted)",
+              border: `1px solid ${renewVenv || reuseVenv === false ? "var(--wt-warn)" : "var(--wt-border)"}`,
+              background:
+                renewVenv || reuseVenv === false ? "color-mix(in srgb, currentColor 12%, transparent)" : "transparent",
+              opacity: reuseVenv === false ? 0.6 : 1,
+              cursor: reuseVenv === false ? "default" : "pointer",
+            }}
+            title={
+              reuseVenv === false
+                ? "設定で venv の流用が無効なので、常に作り直します"
+                : "venv をイメージから作り直す（依存が合わなくなったときの復旧。数分かかります）"
+            }
+          >
+            venv を作り直す
+          </button>
         </div>
         <div className="flex flex-col gap-1.5">
           {GROUPS.map((g) => {

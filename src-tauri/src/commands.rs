@@ -331,10 +331,11 @@ pub async fn be_apply(
     path: String,
     groups: Vec<String>,
     build_groups: Vec<String>,
+    renew_venv: bool,
     channel: Channel<LogEvent>,
 ) -> Result<(), WtError> {
     run_stack_action("BE 差し替え", channel, move |ctx, sink| {
-        verify::be(ctx, &path, &groups, &build_groups, sink)
+        verify::be(ctx, &path, &groups, &build_groups, renew_venv, sink)
     })
     .await
 }

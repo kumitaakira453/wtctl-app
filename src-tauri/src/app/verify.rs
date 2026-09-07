@@ -13,7 +13,7 @@ const HTTP_TIMEOUT: u64 = 60;
 
 pub fn verify(ctx: &Ctx, worktree: &str, plan: &VerifyPlan, sink: &Sink) -> WtResult<()> {
     if plan.has_backend {
-        be(ctx, worktree, &plan.groups, &plan.build_groups, sink)?;
+        be(ctx, worktree, &plan.groups, &plan.build_groups, false, sink)?;
     }
     if plan.fe {
         fe(ctx, worktree, sink)?;
@@ -89,7 +89,14 @@ fn check_services(
     Ok(())
 }
 
-pub fn be(ctx: &Ctx, worktree: &str, groups: &[String], build_groups: &[String], sink: &Sink) -> WtResult<()> {
+pub fn be(
+    ctx: &Ctx,
+    worktree: &str,
+    groups: &[String],
+    build_groups: &[String],
+    force_renew: bool,
+    sink: &Sink,
+) -> WtResult<()> {
     crate::app::migration::ensure_stack(ctx, sink)?;
     for g in groups {
         let gspec = group(g).ok_or_else(|| WtError::new(format!("不明なグループ: {g}")))?;
@@ -119,7 +126,7 @@ pub fn be(ctx: &Ctx, worktree: &str, groups: &[String], build_groups: &[String],
     // 今 volume に入っている venv と同じなら中身は変わらないので付けない。
     // build するときはイメージ側の venv が変わるため必ず作り直す。
     let mut fps: Vec<(String, String)> = Vec::new();
-    let mut renew = build || !ctx.reuse_venv;
+    let mut renew = build || force_renew || !ctx.reuse_venv;
     for g in groups {
         let gspec = group(g).ok_or_else(|| WtError::new(format!("不明なグループ: {g}")))?;
         match venv_fingerprint(ctx, worktree, gspec.src, gspec.image) {
