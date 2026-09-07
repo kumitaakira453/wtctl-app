@@ -163,6 +163,7 @@ export interface ConfigDto {
   worktreeDir: string | null;
   configPath: string;
   stateDir: string;
+  shareNodeModules: boolean;
 }
 
 export interface RepoStatus {

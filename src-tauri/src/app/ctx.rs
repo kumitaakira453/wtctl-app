@@ -13,6 +13,8 @@ use crate::infra::state::State;
 pub struct Ctx {
     pub repo: String,
     pub worktree_dir: String,
+    /// FE の node_modules をメインと共有する（lockfile 一致時のみ効く）。
+    pub share_node_modules: bool,
     pub git: Git,
     pub docker: Docker,
     pub state: State,
@@ -32,6 +34,7 @@ impl Ctx {
         Ok(Ctx {
             repo,
             worktree_dir,
+            share_node_modules: config::share_node_modules(),
             git,
             docker,
             state,

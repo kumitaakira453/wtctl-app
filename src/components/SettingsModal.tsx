@@ -10,6 +10,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [repo, setRepo] = useState("");
   const [worktreeDir, setWorktreeDir] = useState("");
   const [configPath, setConfigPath] = useState("");
+  const [shareNodeModules, setShareNodeModules] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -18,6 +19,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       setRepo(c.repo ?? "");
       setWorktreeDir(c.worktreeDir ?? "");
       setConfigPath(c.configPath);
+      setShareNodeModules(c.shareNodeModules);
     });
   }, []);
 
@@ -34,7 +36,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     setSaving(true);
     setError(null);
     try {
-      await api.setConfig(repo.trim(), worktreeDir.trim() || null);
+      await api.setConfig(repo.trim(), worktreeDir.trim() || null, shareNodeModules);
       reloadStatus();
       void refresh();
       onClose();
@@ -95,6 +97,39 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         setWorktreeDir,
         true,
       )}
+
+      {/* FE の依存を毎回入れ直すのは重いので、同じ lockfile なら共有を選べるようにする */}
+      <div className="mb-4">
+        <div className="mb-1.5 text-xs font-semibold" style={{ color: "var(--wt-muted)" }}>
+          FE の node_modules
+        </div>
+        <div
+          role="button"
+          onClick={() => setShareNodeModules((v) => !v)}
+          className="flex cursor-pointer items-start gap-2.5 rounded-lg px-3 py-2.5"
+          style={{
+            background: shareNodeModules ? "var(--wt-accent-soft)" : "var(--wt-panel)",
+            border: `1px solid ${shareNodeModules ? "var(--wt-accent)" : "var(--wt-border)"}`,
+          }}
+        >
+          <span
+            className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded"
+            style={{
+              background: shareNodeModules ? "var(--wt-accent)" : "transparent",
+              border: `1.5px solid ${shareNodeModules ? "var(--wt-accent)" : "var(--wt-border-strong)"}`,
+            }}
+          >
+            {shareNodeModules && <Icon name="check" size={12} style={{ color: "var(--wt-accent-fg)" }} />}
+          </span>
+          <span className="min-w-0">
+            <span className="text-[13px] font-medium">メインと共有する（symlink）</span>
+            <span className="mt-0.5 block text-[11px]" style={{ color: "var(--wt-muted)" }}>
+              lockfile がメインと一致するときだけ共有し、違えば従来どおり npm ci します。
+              初回の FE 起動が数分から一瞬になります。
+            </span>
+          </span>
+        </div>
+      </div>
 
       {error && (
         <div

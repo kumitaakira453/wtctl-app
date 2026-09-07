@@ -105,6 +105,7 @@ pub struct ConfigDto {
     worktree_dir: Option<String>,
     config_path: String,
     state_dir: String,
+    share_node_modules: bool,
 }
 
 #[derive(Serialize)]
@@ -125,13 +126,24 @@ pub fn get_config() -> ConfigDto {
         worktree_dir: get("worktree_dir"),
         config_path: config::config_path().to_string_lossy().to_string(),
         state_dir: config::state_dir().to_string_lossy().to_string(),
+        share_node_modules: cfg
+            .get("share_node_modules")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
     }
 }
 
 #[tauri::command]
-pub fn set_config(repo: String, worktree_dir: Option<String>) -> Result<(), WtError> {
+pub fn set_config(
+    repo: String,
+    worktree_dir: Option<String>,
+    share_node_modules: Option<bool>,
+) -> Result<(), WtError> {
     let mut cfg = config::load_config();
     cfg.insert("repo".to_string(), Value::String(repo));
+    if let Some(share) = share_node_modules {
+        cfg.insert("share_node_modules".to_string(), Value::Bool(share));
+    }
     match worktree_dir {
         Some(w) if !w.trim().is_empty() => {
             cfg.insert("worktree_dir".to_string(), Value::String(w));

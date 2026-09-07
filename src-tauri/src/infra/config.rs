@@ -40,6 +40,11 @@ pub fn state_dir() -> PathBuf {
     xdg_dir("XDG_STATE_HOME", &[".local", "state"])
 }
 
+/// FE の node_modules をメインと共有するか（既定 false）。
+pub fn share_node_modules() -> bool {
+    load_config().get("share_node_modules").and_then(|v| v.as_bool()).unwrap_or(false)
+}
+
 pub fn load_config() -> Map<String, Value> {
     let path = config_path();
     if !path.exists() {

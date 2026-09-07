@@ -142,6 +142,25 @@ fn ensure_deps(ctx: &Ctx, worktree: &str, webdir: &str, sink: &Sink) -> WtResult
         sink(LogEvent::info("npm ci: skip（lockfile 不変）"));
         return Ok(());
     }
+    // 依存が main と同一（lockfile が一致）なら、node_modules を main への symlink で
+    // 済ませる。npm ci は数分、実体コピーでも 1 分以上かかるのに対して一瞬で終わる。
+    // vite の dep 最適化キャッシュは cacheDir で node_modules の外に出ているため、
+    // 共有しても worktree 間で混ざらない。
+    if ctx.share_node_modules {
+        let main = ctx.git.main_path()?;
+        let main_lock = Path::new(&main).join("package-lock.json").to_string_lossy().to_string();
+        match ctx.fs.file_sha256(&main_lock) {
+            Some(main_sha) if main_sha == lock_sha => {
+                let made = ctx.fs.link_node_modules(&main, worktree)?;
+                if made > 0 || ctx.fs.vite_bin(webdir).is_some() {
+                    sink(LogEvent::info("node_modules: main と共有（lockfile 一致）"));
+                    return Ok(());
+                }
+            }
+            Some(_) => sink(LogEvent::info("node_modules 共有: lockfile が main と異なるため npm ci します")),
+            None => {}
+        }
+    }
     sink(LogEvent::info("npm ci 実行（数分かかる場合あり）"));
     ctx.process.npm_ci(worktree, sink)?;
     ctx.state.store_npmci_cache(worktree, &lock_sha)?;

@@ -1,6 +1,6 @@
 //! ファイルシステム読み取り・env コピー。
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
@@ -22,6 +22,33 @@ impl Fs {
         let mut hasher = Sha256::new();
         hasher.update(&bytes);
         Some(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
+    }
+
+    /// worktree の node_modules をメインへの symlink にする。既に実体があるものは触らない。
+    /// 対象は npm workspaces の hoist 先（リポジトリ直下）と、vite がローカル導入される
+    /// frontend/web の 2 箇所。作った数を返す。
+    pub fn link_node_modules(&self, main: &str, worktree: &str) -> WtResult<usize> {
+        let mut made = 0;
+        for rel in [PathBuf::from("node_modules"), Path::new("frontend").join("web").join("node_modules")] {
+            let src = Path::new(main).join(&rel);
+            let dst = Path::new(worktree).join(&rel);
+            if !src.is_dir() {
+                continue;
+            }
+            match std::fs::symlink_metadata(&dst) {
+                // 既存の symlink は貼り直す（別の worktree を指していることがある）
+                Ok(meta) if meta.file_type().is_symlink() => std::fs::remove_file(&dst)?,
+                // 実体があるなら尊重する（npm ci 済みのものを消さない）
+                Ok(_) => continue,
+                Err(_) => {}
+            }
+            if let Some(parent) = dst.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::os::unix::fs::symlink(&src, &dst)?;
+            made += 1;
+        }
+        Ok(made)
     }
 
     pub fn vite_bin(&self, webdir: &str) -> Option<String> {
