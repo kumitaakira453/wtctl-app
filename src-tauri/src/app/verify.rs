@@ -40,6 +40,55 @@ fn venv_fingerprint(ctx: &Ctx, worktree: &str, group_src: &str, image: &str) -> 
     Some(parts.join("-"))
 }
 
+/// 差し替え後の健全性の判定結果。venv の作り直しで直る見込みがあるものだけを
+/// Deps に分ける。応答しないだけでは作り直さない（アプリ側の不具合や起動の遅れでも
+/// 起きるため、数百 MB のコピーを無駄に走らせない）。
+enum CheckFail {
+    /// 依存の読み込みに失敗している。venv を作り直せば直る見込みがある。
+    Deps(String),
+    Other(String),
+}
+
+impl CheckFail {
+    fn reason(&self) -> &str {
+        match self {
+            CheckFail::Deps(r) | CheckFail::Other(r) => r,
+        }
+    }
+}
+
+/// 差し替え後の健全性を見る。judge_secs は「今回の再作成以降」とみなすログの範囲。
+/// 依存の失敗は先に見る。コンテナが落ちているときに HTTP の待ちを消費しないため。
+fn check_services(
+    ctx: &Ctx,
+    worktree: &str,
+    services: &[String],
+    judge_secs: u64,
+    sink: &Sink,
+) -> Result<(), CheckFail> {
+    for svc in services {
+        let mount = ctx.docker.app_mount(svc);
+        sink(LogEvent::info(format!("{svc} mount: {mount}")));
+        if !mount.starts_with(worktree) {
+            return Err(CheckFail::Other(format!("{svc} の mount が worktree を指していない")));
+        }
+        let logs = ctx.docker.logs_since(svc, judge_secs);
+        if logs.contains("ModuleNotFoundError") || logs.contains("ImportError") {
+            return Err(CheckFail::Deps(format!("{svc} で依存の読み込みに失敗している")));
+        }
+        let state = ctx.docker.container_state(svc);
+        if state != "running" {
+            return Err(CheckFail::Other(format!("{svc} が {state} で止まっている")));
+        }
+        if let Some(port) = service(svc).and_then(|s| s.port) {
+            if !ctx.http.wait(&format!("http://localhost:{port}/"), HTTP_TIMEOUT, sink) {
+                return Err(CheckFail::Other(format!("{svc} が応答しない")));
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn be(ctx: &Ctx, worktree: &str, groups: &[String], build_groups: &[String], sink: &Sink) -> WtResult<()> {
     crate::app::migration::ensure_stack(ctx, sink)?;
     for g in groups {
@@ -87,39 +136,54 @@ pub fn be(ctx: &Ctx, worktree: &str, groups: &[String], build_groups: &[String],
         }
     }
 
-    sink(LogEvent::info(format!(
-        "コンテナ再作成: {}{}{}",
-        services.join(", "),
-        if build { "（--build）" } else { "" },
-        if renew { "（venv 作り直し）" } else { "（venv 流用）" }
-    )));
-    if renew {
-        // 作り直しの途中で失敗すると volume の中身が不定になるので、記録を先に捨てる
-        for svc in &services {
-            ctx.state.forget_venv(svc);
-        }
-    }
-    ctx.docker.compose_up(&services, true, build, renew, sink)?;
-    for (svc, fp) in &fps {
-        ctx.state.store_venv(svc, fp)?;
-    }
-
-    for svc in &services {
-        let mount = ctx.docker.app_mount(svc);
-        sink(LogEvent::info(format!("{svc} mount: {mount}")));
-        if !mount.starts_with(worktree) {
-            return Err(WtError::new(format!("{svc} の mount が worktree を指していない")));
-        }
-        if let Some(port) = service(svc).and_then(|s| s.port) {
-            if !ctx.http.wait(&format!("http://localhost:{port}/"), HTTP_TIMEOUT, sink) {
-                return Err(WtError::new(format!("{svc} が応答しない")));
+    // 流用して動かなかったときは、その場で作り直して往復を省く。
+    // 記録とボリュームの実体が食い違うのは外部ツールや手動操作の後に起こり得るので、
+    // 利用者に設定を戻させるのではなく自動で復旧する。
+    // 流用して依存が合わなかったときだけ、その場で作り直して再試行する。
+    // 記録とボリュームの実体が食い違うのは外部ツールや手動操作の後に起こり得るので、
+    // 利用者に設定を戻させるのではなく自動で復旧する。再試行は 1 回だけで、
+    // 作り直した後に失敗したらもう作り直さない（同じことを繰り返しても直らない）。
+    for attempt in 0..2 {
+        sink(LogEvent::info(format!(
+            "コンテナ再作成: {}{}{}",
+            services.join(", "),
+            if build { "（--build）" } else { "" },
+            if renew { "（venv 作り直し）" } else { "（venv 流用）" }
+        )));
+        if renew {
+            // 作り直しの途中で失敗すると volume の中身が不定になるので、記録を先に捨てる
+            for svc in &services {
+                ctx.state.forget_venv(svc);
             }
         }
+        let started = std::time::Instant::now();
+        ctx.docker.compose_up(&services, true, build, renew, sink)?;
+        if renew {
+            for (svc, fp) in &fps {
+                ctx.state.store_venv(svc, fp)?;
+            }
+        }
+        // 再作成にかかった時間の分だけ遡る。差分が無くて再作成されなかった場合に
+        // 過去のログを拾わないよう、範囲は必ず今回の操作以降に限る。
+        let judge_secs = started.elapsed().as_secs() + 5;
+
+        match check_services(ctx, worktree, &services, judge_secs, sink) {
+            Ok(()) => {
+                sink(LogEvent::success(format!(
+                    "BE は {worktree} のコードで稼働中（autoreload 有効）"
+                )));
+                return Ok(());
+            }
+            Err(CheckFail::Deps(reason)) if attempt == 0 && !renew => {
+                sink(LogEvent::warn(format!(
+                    "{reason}。流用した venv が合っていないため作り直して再試行します"
+                )));
+                renew = true;
+            }
+            Err(fail) => return Err(WtError::new(fail.reason().to_string())),
+        }
     }
-    sink(LogEvent::success(format!(
-        "BE は {worktree} のコードで稼働中（autoreload 有効）"
-    )));
-    Ok(())
+    Err(WtError::new("BE の差し替えに失敗しました"))
 }
 
 /// worktree の FE を常に単一ポート :3000 で起動する（並行させない）。

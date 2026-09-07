@@ -175,6 +175,18 @@ impl Docker {
         self.run_compose(&["restart", service], false, sink)
     }
 
+    /// since_secs 秒以内のコンテナログ。差分が無くて再作成されなかった場合に、
+    /// 過去の import エラーを拾って誤判定しないよう、必ず期間で絞る。
+    pub fn logs_since(&self, service: &str, since_secs: u64) -> String {
+        let since = format!("{since_secs}s");
+        capture(
+            &["docker", "logs", "--since", &since, &self.container(service)],
+            None,
+            false,
+        )
+        .unwrap_or_default()
+    }
+
     /// イメージの ID。誰が再ビルドしても変わるので、venv 流用の可否判定に使う。
     pub fn image_id(&self, image: &str) -> Option<String> {
         let out = capture(&["docker", "image", "inspect", image, "--format", "{{.Id}}"], None, false).ok()?;
