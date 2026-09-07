@@ -2,7 +2,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import { api, errorMessage } from "../lib/ipc";
 import { useApp } from "../state/app";
-import { Button, Modal } from "./ui";
+import { Button, CheckBox, Modal } from "./ui";
 import { Icon } from "./Icon";
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
@@ -106,28 +106,22 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         <div
           role="button"
           onClick={() => setShareNodeModules((v) => !v)}
-          className="flex cursor-pointer items-start gap-2.5 rounded-lg px-3 py-2.5"
+          className="cursor-pointer rounded-lg px-3 py-2.5"
           style={{
             background: shareNodeModules ? "var(--wt-accent-soft)" : "var(--wt-panel)",
             border: `1px solid ${shareNodeModules ? "var(--wt-accent)" : "var(--wt-border)"}`,
           }}
         >
-          <span
-            className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded"
-            style={{
-              background: shareNodeModules ? "var(--wt-accent)" : "transparent",
-              border: `1.5px solid ${shareNodeModules ? "var(--wt-accent)" : "var(--wt-border-strong)"}`,
-            }}
-          >
-            {shareNodeModules && <Icon name="check" size={12} style={{ color: "var(--wt-accent-fg)" }} />}
-          </span>
-          <span className="min-w-0">
+          {/* チェックと見出しを同じ 1 行に入れ、縦位置は items-center に任せる */}
+          <div className="flex items-center gap-2.5">
+            <CheckBox on={shareNodeModules} />
             <span className="text-[13px] font-medium">メインと共有する（symlink）</span>
-            <span className="mt-0.5 block text-[11px]" style={{ color: "var(--wt-muted)" }}>
-              lockfile がメインと一致するときだけ共有し、違えば従来どおり npm ci します。
-              初回の FE 起動が数分から一瞬になります。
-            </span>
-          </span>
+          </div>
+          {/* 説明はチェック幅 + gap の分だけ字下げして見出しに揃える */}
+          <div className="mt-1 pl-[26px] text-[11px] leading-relaxed" style={{ color: "var(--wt-muted)" }}>
+            lockfile がメインと一致するときだけ共有し、違えば従来どおり npm ci します。
+            初回の FE 起動が数分から一瞬になります。
+          </div>
         </div>
       </div>
 

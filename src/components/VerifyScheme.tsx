@@ -6,21 +6,7 @@ import type { VerifyPlan, WorktreeEntry } from "../lib/types";
 import { useApp, type Step } from "../state/app";
 import { actionBusyAtom, mountsAtom, vitesAtom } from "../state/atoms";
 import { Icon } from "./Icon";
-import { Badge, Button, Modal } from "./ui";
-
-function CheckBox({ on }: { on: boolean }) {
-  return (
-    <span
-      className="grid h-4 w-4 shrink-0 place-items-center rounded"
-      style={{
-        background: on ? "var(--wt-accent)" : "transparent",
-        border: `1.5px solid ${on ? "var(--wt-accent)" : "var(--wt-border-strong)"}`,
-      }}
-    >
-      {on && <Icon name="check" size={12} style={{ color: "var(--wt-accent-fg)" }} />}
-    </span>
-  );
-}
+import { Badge, Button, CheckBox, Modal } from "./ui";
 
 /// 全幅・均一な行。左にチェック、右に任意の trailing 要素。
 function Row({

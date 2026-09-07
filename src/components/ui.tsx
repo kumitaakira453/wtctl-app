@@ -100,6 +100,22 @@ export function IconButton({
   );
 }
 
+/// チェックボックスの見た目だけを持つ表示部品。行の縦位置は呼び出し側で
+/// 1 行の flex に入れて items-center で揃える（余白の当て込みでずらさない）。
+export function CheckBox({ on }: { on: boolean }) {
+  return (
+    <span
+      className="grid h-4 w-4 shrink-0 place-items-center rounded"
+      style={{
+        background: on ? "var(--wt-accent)" : "transparent",
+        border: `1.5px solid ${on ? "var(--wt-accent)" : "var(--wt-border-strong)"}`,
+      }}
+    >
+      {on && <Icon name="check" size={12} style={{ color: "var(--wt-accent-fg)" }} />}
+    </span>
+  );
+}
+
 export function Badge({
   children,
   color = "var(--wt-muted)",
