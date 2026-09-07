@@ -164,6 +164,7 @@ export interface ConfigDto {
   configPath: string;
   stateDir: string;
   shareNodeModules: boolean;
+  reuseVenv: boolean;
 }
 
 export interface RepoStatus {

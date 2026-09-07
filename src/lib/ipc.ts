@@ -18,8 +18,8 @@ import type {
 /// 読み取り系コマンド。
 export const api = {
   getConfig: () => invoke<ConfigDto>("get_config"),
-  setConfig: (repo: string, worktreeDir: string | null, shareNodeModules: boolean) =>
-    invoke<void>("set_config", { repo, worktreeDir, shareNodeModules }),
+  setConfig: (repo: string, worktreeDir: string | null, shareNodeModules: boolean, reuseVenv: boolean) =>
+    invoke<void>("set_config", { repo, worktreeDir, shareNodeModules, reuseVenv }),
   repoStatus: () => invoke<RepoStatus>("repo_status"),
   listWorktrees: () => invoke<ListResult>("list_worktrees"),
   getLive: () => invoke<LiveResult>("get_live"),

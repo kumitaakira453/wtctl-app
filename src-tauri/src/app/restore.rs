@@ -43,7 +43,7 @@ fn restore_be_core(ctx: &Ctx, sink: &Sink) -> WtResult<Vec<String>> {
     }
 
     if !swapped.is_empty() {
-        ctx.docker.compose_up(&swapped, false, false, sink)?;
+        ctx.docker.compose_up(&swapped, false, false, true, sink)?;
         for svc in &swapped {
             let mount = ctx.docker.app_mount(svc);
             let expect = format!("{}/{}", main, service(svc).map(|s| s.src).unwrap_or(""));

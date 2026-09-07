@@ -11,6 +11,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [worktreeDir, setWorktreeDir] = useState("");
   const [configPath, setConfigPath] = useState("");
   const [shareNodeModules, setShareNodeModules] = useState(false);
+  const [reuseVenv, setReuseVenv] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -20,6 +21,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       setWorktreeDir(c.worktreeDir ?? "");
       setConfigPath(c.configPath);
       setShareNodeModules(c.shareNodeModules);
+      setReuseVenv(c.reuseVenv);
     });
   }, []);
 
@@ -36,7 +38,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     setSaving(true);
     setError(null);
     try {
-      await api.setConfig(repo.trim(), worktreeDir.trim() || null, shareNodeModules);
+      await api.setConfig(repo.trim(), worktreeDir.trim() || null, shareNodeModules, reuseVenv);
       reloadStatus();
       void refresh();
       onClose();
@@ -46,6 +48,28 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       setSaving(false);
     }
   };
+
+  const toggleRow = (on: boolean, onToggle: () => void, label: string, help: string) => (
+    <div
+      role="button"
+      onClick={onToggle}
+      className="cursor-pointer rounded-lg px-3 py-2.5"
+      style={{
+        background: on ? "var(--wt-accent-soft)" : "var(--wt-panel)",
+        border: `1px solid ${on ? "var(--wt-accent)" : "var(--wt-border)"}`,
+      }}
+    >
+      {/* チェックと見出しを同じ 1 行に入れ、縦位置は items-center に任せる */}
+      <div className="flex items-center gap-2.5">
+        <CheckBox on={on} />
+        <span className="text-[13px] font-medium">{label}</span>
+      </div>
+      {/* 説明はチェック幅 + gap の分だけ字下げして見出しに揃える */}
+      <div className="mt-1 pl-[26px] text-[11px] leading-relaxed" style={{ color: "var(--wt-muted)" }}>
+        {help}
+      </div>
+    </div>
+  );
 
   const pathRow = (
     label: string,
@@ -98,30 +122,24 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         true,
       )}
 
-      {/* FE の依存を毎回入れ直すのは重いので、同じ lockfile なら共有を選べるようにする */}
+      {/* 依存を毎回入れ直すのは重いので、同じ定義なら流用を選べるようにする */}
       <div className="mb-4">
         <div className="mb-1.5 text-xs font-semibold" style={{ color: "var(--wt-muted)" }}>
-          FE の node_modules
+          依存の使い回し（速度優先）
         </div>
-        <div
-          role="button"
-          onClick={() => setShareNodeModules((v) => !v)}
-          className="cursor-pointer rounded-lg px-3 py-2.5"
-          style={{
-            background: shareNodeModules ? "var(--wt-accent-soft)" : "var(--wt-panel)",
-            border: `1px solid ${shareNodeModules ? "var(--wt-accent)" : "var(--wt-border)"}`,
-          }}
-        >
-          {/* チェックと見出しを同じ 1 行に入れ、縦位置は items-center に任せる */}
-          <div className="flex items-center gap-2.5">
-            <CheckBox on={shareNodeModules} />
-            <span className="text-[13px] font-medium">メインと共有する（symlink）</span>
-          </div>
-          {/* 説明はチェック幅 + gap の分だけ字下げして見出しに揃える */}
-          <div className="mt-1 pl-[26px] text-[11px] leading-relaxed" style={{ color: "var(--wt-muted)" }}>
-            lockfile がメインと一致するときだけ共有し、違えば従来どおり npm ci します。
-            初回の FE 起動が数分から一瞬になります。
-          </div>
+        <div className="flex flex-col gap-1.5">
+          {toggleRow(
+            shareNodeModules,
+            () => setShareNodeModules((v) => !v),
+            "FE: node_modules をメインと共有（symlink）",
+            "lockfile がメインと一致するときだけ共有し、違えば従来どおり npm ci します。新しい worktree の初回 FE 起動が数分から一瞬になります。",
+          )}
+          {toggleRow(
+            reuseVenv,
+            () => setReuseVenv((v) => !v),
+            "BE: venv を作り直さず流用",
+            "依存定義（uv.lock / pyproject）とイメージが前回と同じときだけ流用します。差し替えごとの venv コピー（1 コンテナ 516MB）が無くなります。合わなくなったら ModuleNotFoundError で出るので、外して検証を 1 回流せば直ります。",
+          )}
         </div>
       </div>
 

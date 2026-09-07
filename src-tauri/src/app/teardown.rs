@@ -68,7 +68,7 @@ fn restore_worktree_mounts(ctx: &Ctx, worktree: &str, sink: &Sink) -> WtResult<(
     }
 
     if !stale.is_empty() {
-        ctx.docker.compose_up(&stale, false, false, sink)?;
+        ctx.docker.compose_up(&stale, false, false, true, sink)?;
         for svc in &stale {
             if ctx.docker.app_mount(svc).starts_with(&canonical(worktree)) {
                 return Err(WtError::new(format!("{svc} の mount が worktree を指したまま")));

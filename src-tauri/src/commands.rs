@@ -106,6 +106,7 @@ pub struct ConfigDto {
     config_path: String,
     state_dir: String,
     share_node_modules: bool,
+    reuse_venv: bool,
 }
 
 #[derive(Serialize)]
@@ -130,6 +131,7 @@ pub fn get_config() -> ConfigDto {
             .get("share_node_modules")
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
+        reuse_venv: cfg.get("reuse_venv").and_then(|v| v.as_bool()).unwrap_or(false),
     }
 }
 
@@ -138,11 +140,15 @@ pub fn set_config(
     repo: String,
     worktree_dir: Option<String>,
     share_node_modules: Option<bool>,
+    reuse_venv: Option<bool>,
 ) -> Result<(), WtError> {
     let mut cfg = config::load_config();
     cfg.insert("repo".to_string(), Value::String(repo));
     if let Some(share) = share_node_modules {
         cfg.insert("share_node_modules".to_string(), Value::Bool(share));
+    }
+    if let Some(reuse) = reuse_venv {
+        cfg.insert("reuse_venv".to_string(), Value::Bool(reuse));
     }
     match worktree_dir {
         Some(w) if !w.trim().is_empty() => {

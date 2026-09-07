@@ -15,6 +15,8 @@ pub struct Ctx {
     pub worktree_dir: String,
     /// FE の node_modules をメインと共有する（lockfile 一致時のみ効く）。
     pub share_node_modules: bool,
+    /// BE 差し替え時に venv の匿名 volume を流用する（依存定義が一致時のみ効く）。
+    pub reuse_venv: bool,
     pub git: Git,
     pub docker: Docker,
     pub state: State,
@@ -35,6 +37,7 @@ impl Ctx {
             repo,
             worktree_dir,
             share_node_modules: config::share_node_modules(),
+            reuse_venv: config::reuse_venv(),
             git,
             docker,
             state,

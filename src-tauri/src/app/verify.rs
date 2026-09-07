@@ -21,6 +21,25 @@ pub fn verify(ctx: &Ctx, worktree: &str, plan: &VerifyPlan, sink: &Sink) -> WtRe
     Ok(())
 }
 
+/// コンテナの venv が何から作られたかを表す指紋。
+/// dockerfile の development ステージは root の pyproject.toml / uv.lock と
+/// グループの pyproject.toml から `uv sync --frozen` するので依存定義はこの 3 つで決まる。
+/// あわせてイメージ ID も混ぜる。volume はイメージから populate されるため、
+/// 他のツールや手動操作で再ビルドされた場合も ID が変わって作り直しに倒れる。
+fn venv_fingerprint(ctx: &Ctx, worktree: &str, group_src: &str, image: &str) -> Option<String> {
+    let files = [
+        Path::new(worktree).join("pyproject.toml"),
+        Path::new(worktree).join("uv.lock"),
+        Path::new(worktree).join(group_src).join("pyproject.toml"),
+    ];
+    let mut parts: Vec<String> = Vec::new();
+    for f in files {
+        parts.push(ctx.fs.file_sha256(&f.to_string_lossy())?);
+    }
+    parts.push(ctx.docker.image_id(image)?);
+    Some(parts.join("-"))
+}
+
 pub fn be(ctx: &Ctx, worktree: &str, groups: &[String], build_groups: &[String], sink: &Sink) -> WtResult<()> {
     crate::app::migration::ensure_stack(ctx, sink)?;
     for g in groups {
@@ -46,12 +65,44 @@ pub fn be(ctx: &Ctx, worktree: &str, groups: &[String], build_groups: &[String],
     ctx.state.render_override(&swaps)?;
 
     let build = groups.iter().any(|g| build_groups.contains(g));
+
+    // `-V` を付けると venv（数百 MB）がイメージから毎回コピーされる。依存定義が
+    // 今 volume に入っている venv と同じなら中身は変わらないので付けない。
+    // build するときはイメージ側の venv が変わるため必ず作り直す。
+    let mut fps: Vec<(String, String)> = Vec::new();
+    let mut renew = build || !ctx.reuse_venv;
+    for g in groups {
+        let gspec = group(g).ok_or_else(|| WtError::new(format!("不明なグループ: {g}")))?;
+        match venv_fingerprint(ctx, worktree, gspec.src, gspec.image) {
+            Some(fp) => {
+                for svc in gspec.services {
+                    if !ctx.state.venv_matches(svc, &fp) {
+                        renew = true;
+                    }
+                    fps.push(((*svc).to_string(), fp.clone()));
+                }
+            }
+            // 依存定義が読めないときは安全側に倒して作り直す
+            None => renew = true,
+        }
+    }
+
     sink(LogEvent::info(format!(
-        "コンテナ再作成: {}{}",
+        "コンテナ再作成: {}{}{}",
         services.join(", "),
-        if build { "（--build）" } else { "" }
+        if build { "（--build）" } else { "" },
+        if renew { "（venv 作り直し）" } else { "（venv 流用）" }
     )));
-    ctx.docker.compose_up(&services, true, build, sink)?;
+    if renew {
+        // 作り直しの途中で失敗すると volume の中身が不定になるので、記録を先に捨てる
+        for svc in &services {
+            ctx.state.forget_venv(svc);
+        }
+    }
+    ctx.docker.compose_up(&services, true, build, renew, sink)?;
+    for (svc, fp) in &fps {
+        ctx.state.store_venv(svc, fp)?;
+    }
 
     for svc in &services {
         let mount = ctx.docker.app_mount(svc);

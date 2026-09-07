@@ -145,8 +145,21 @@ impl Docker {
         if t.is_empty() { "missing".to_string() } else { t.to_string() }
     }
 
-    pub fn compose_up(&self, services: &[String], with_override: bool, build: bool, sink: &Sink) -> WtResult<()> {
-        let mut args: Vec<&str> = vec!["up", "-d", "--no-deps", "-V"];
+    /// renew_anon は `-V`（--renew-anon-volumes）。`/app/.venv` の匿名 volume を作り直すため、
+    /// 付けるとイメージから venv（数百 MB）が毎回コピーされて数分かかる。venv の中身が
+    /// 変わらないときは外す。
+    pub fn compose_up(
+        &self,
+        services: &[String],
+        with_override: bool,
+        build: bool,
+        renew_anon: bool,
+        sink: &Sink,
+    ) -> WtResult<()> {
+        let mut args: Vec<&str> = vec!["up", "-d", "--no-deps"];
+        if renew_anon {
+            args.push("-V");
+        }
         if build {
             args.push("--build");
         }
@@ -160,6 +173,13 @@ impl Docker {
 
     pub fn compose_restart(&self, service: &str, sink: &Sink) -> WtResult<()> {
         self.run_compose(&["restart", service], false, sink)
+    }
+
+    /// イメージの ID。誰が再ビルドしても変わるので、venv 流用の可否判定に使う。
+    pub fn image_id(&self, image: &str) -> Option<String> {
+        let out = capture(&["docker", "image", "inspect", image, "--format", "{{.Id}}"], None, false).ok()?;
+        let id = out.trim().to_string();
+        if id.is_empty() { None } else { Some(id) }
     }
 
     pub fn remove_image(&self, image: &str) {

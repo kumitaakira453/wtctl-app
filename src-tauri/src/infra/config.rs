@@ -45,6 +45,11 @@ pub fn share_node_modules() -> bool {
     load_config().get("share_node_modules").and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
+/// BE 差し替え時に venv の匿名 volume を作り直さず流用するか（既定 false）。
+pub fn reuse_venv() -> bool {
+    load_config().get("reuse_venv").and_then(|v| v.as_bool()).unwrap_or(false)
+}
+
 pub fn load_config() -> Map<String, Value> {
     let path = config_path();
     if !path.exists() {

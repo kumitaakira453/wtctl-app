@@ -36,7 +36,7 @@ pub fn health(ctx: &Ctx, sink: &Sink) -> WtResult<()> {
                 state_label(mount.state)
             )));
             let result = if in_swaps {
-                ctx.docker.compose_up(std::slice::from_ref(svc), true, false, sink)
+                ctx.docker.compose_up(std::slice::from_ref(svc), true, false, true, sink)
             } else {
                 ctx.docker.compose_restart(svc, sink)
             };

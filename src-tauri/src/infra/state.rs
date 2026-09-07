@@ -115,6 +115,25 @@ impl State {
     }
 
     // --- npm ci キャッシュ ---
+    /// サービスの匿名 volume に入っている venv が、どの依存定義から作られたかの記録。
+    fn venv_path(&self, service: &str) -> PathBuf {
+        self.dir.join(format!("venv-{service}.sha"))
+    }
+
+    pub fn venv_matches(&self, service: &str, sha: &str) -> bool {
+        std::fs::read_to_string(self.venv_path(service)).map(|s| s.trim() == sha).unwrap_or(false)
+    }
+
+    pub fn store_venv(&self, service: &str, sha: &str) -> WtResult<()> {
+        std::fs::write(self.venv_path(service), sha)?;
+        Ok(())
+    }
+
+    /// venv を作り直したか分からなくなったときのために記録を落とす。
+    pub fn forget_venv(&self, service: &str) {
+        let _ = std::fs::remove_file(self.venv_path(service));
+    }
+
     pub fn npmci_cache_matches(&self, worktree: &str, lock_sha: &str) -> bool {
         let path = self.npmci_path(worktree);
         std::fs::read_to_string(&path).map(|s| s.trim() == lock_sha).unwrap_or(false)
