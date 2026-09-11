@@ -17,13 +17,14 @@ const WORKING: CommitInfo = {
   body: "",
 };
 
-// 一覧は merge-base..HEAD なので、全コミットをまとめた差分はブランチ全体の差分になる。
+// 一覧は merge-base..HEAD なので、分岐点から作業ツリーまでを見れば
+// コミット済みと未コミットの両方を含むブランチ全体の差分になる。
 const ALL: CommitInfo = {
   sha: "ALL",
   shortSha: "all",
-  subject: "すべてのコミットの差分",
+  subject: "すべての差分（未コミット含む）",
   author: "",
-  rel: "ブランチ全体",
+  rel: "分岐点から作業ツリーまで",
   body: "",
 };
 
@@ -33,8 +34,8 @@ const PSEUDO = new Set([WORKING.sha, ALL.sha]);
 function withPseudo(log: CommitInfo[], dirty: boolean): CommitInfo[] {
   const list: CommitInfo[] = [];
   if (dirty) list.push(WORKING);
-  // 1 コミットしかないときは「すべて」がそのコミットと同じ内容になるので出さない。
-  if (log.length > 1) list.push(ALL);
+  // まとめる対象が 1 つしかないときは、その行と同じ内容になるので出さない。
+  if (log.length + (dirty ? 1 : 0) > 1) list.push(ALL);
   return [...list, ...log];
 }
 
@@ -45,9 +46,9 @@ function rangeOf(commits: CommitInfo[], anchor: string | null, head: string | nu
   if (anchor === WORKING.sha) return { from: WORKING.sha, to: WORKING.sha };
   const real = commits.filter((c) => !PSEUDO.has(c.sha));
   if (anchor === ALL.sha) {
+    // 一番古いコミットの第 1 親（= 分岐点）から作業ツリーまで
     const oldest = real[real.length - 1];
-    const newest = real[0];
-    return oldest && newest ? { from: oldest.sha, to: newest.sha } : null;
+    return oldest ? { from: oldest.sha, to: WORKING.sha } : null;
   }
   const ai = commits.findIndex((c) => c.sha === anchor);
   const hi = head ? commits.findIndex((c) => c.sha === head) : -1;

@@ -301,6 +301,7 @@ impl Git {
     /// 1 コミット（または未コミット="WORKING"）で変わったファイル一覧。
     /// from（古い側）の第1親から to（新しい側）までの変更ファイル。
     /// from == to なら 1 コミット分。複数コミットをまとめて見るときは範囲になる。
+    /// to == "WORKING" は作業ツリーまで含める（未コミットの変更と未追跡ファイルも入る）。
     pub fn commit_files(&self, worktree: &str, from: &str, to: &str) -> Vec<crate::domain::models::FileChange> {
         use crate::domain::models::FileChange;
         if from == "WORKING" {
@@ -309,20 +310,19 @@ impl Git {
         // committed: 第1親との 2-way 差分で name-status（種別・パス）と numstat（増減）を取る。
         // マージコミットで show が出す combined diff（diff --cc / @@@）を避ける。
         let parent = format!("{from}^");
-        let sha = to;
-        let ns = capture(
-            &[
-                "git", "-c", "core.quotePath=false", "-C", worktree, "diff", "--name-status", "-M",
-                &parent, sha,
-            ],
-            None,
-            false,
-        )
-        .unwrap_or_default();
-        let nums = self.numstat_map(&[
+        let to_working = to == "WORKING";
+        // 作業ツリーまで見るときは第 2 リビジョンを付けない（git diff <rev> が rev と作業ツリーの差分）。
+        let revs: Vec<&str> = if to_working { vec![&parent] } else { vec![&parent, to] };
+        let mut ns_args: Vec<&str> = vec![
+            "git", "-c", "core.quotePath=false", "-C", worktree, "diff", "--name-status", "-M",
+        ];
+        ns_args.extend(&revs);
+        let ns = capture(&ns_args, None, false).unwrap_or_default();
+        let mut num_args: Vec<&str> = vec![
             "git", "-c", "core.quotePath=false", "-C", worktree, "diff", "--numstat", "-M",
-            &parent, sha,
-        ]);
+        ];
+        num_args.extend(&revs);
+        let nums = self.numstat_map(&num_args);
         let mut files: Vec<FileChange> = Vec::new();
         for line in ns.lines() {
             if line.trim().is_empty() {
@@ -336,6 +336,9 @@ impl Git {
             let path = cols[1].split('\t').last().unwrap_or(cols[1]).to_string();
             let (add, del) = nums.get(&path).copied().unwrap_or((0, 0));
             files.push(FileChange { status, path, additions: add, deletions: del });
+        }
+        if to_working {
+            files.extend(self.untracked_files(worktree));
         }
         files.sort_by(|a, b| a.path.cmp(&b.path));
         files
@@ -371,7 +374,14 @@ impl Git {
             let (add, del) = nums.get(&path).copied().unwrap_or((0, 0));
             files.push(FileChange { status, path, additions: add, deletions: del });
         }
-        // 未追跡ファイル（ディレクトリではなく個別ファイル単位）
+        files.extend(self.untracked_files(worktree));
+        files.sort_by(|a, b| a.path.cmp(&b.path));
+        files
+    }
+
+    /// 未追跡ファイル（ディレクトリではなく個別ファイル単位）。
+    fn untracked_files(&self, worktree: &str) -> Vec<crate::domain::models::FileChange> {
+        use crate::domain::models::FileChange;
         let others = capture(
             &[
                 "git", "-c", "core.quotePath=false", "-C", worktree, "ls-files", "--others",
@@ -381,19 +391,16 @@ impl Git {
             false,
         )
         .unwrap_or_default();
-        for path in others.lines() {
-            if path.trim().is_empty() {
-                continue;
-            }
-            files.push(FileChange {
+        others
+            .lines()
+            .filter(|p| !p.trim().is_empty())
+            .map(|path| FileChange {
                 status: "?".to_string(),
                 path: path.to_string(),
                 additions: 0,
                 deletions: 0,
-            });
-        }
-        files.sort_by(|a, b| a.path.cmp(&b.path));
-        files
+            })
+            .collect()
     }
 
     /// numstat 出力を path -> (add, del) にする（rename 記法は新パスに正規化）。
@@ -440,8 +447,24 @@ impl Git {
         }
         // 第1親との 2-way 差分（マージの combined diff を避ける）
         let parent = format!("{from}^");
+        let mut args: Vec<&str> = vec![
+            "git", "-c", "core.quotePath=false", "-C", worktree, "diff", &uarg, "-M", &parent,
+        ];
+        // 作業ツリーまで見るときは第 2 リビジョンを付けない
+        if to != "WORKING" {
+            args.push(to);
+        }
+        args.extend(["--", path]);
+        let out = capture(&args, None, false).unwrap_or_default();
+        if !out.trim().is_empty() || to != "WORKING" {
+            return out;
+        }
+        // 作業ツリーまで含めたときの未追跡ファイル: /dev/null との差分で全追加表示にする
         capture(
-            &["git", "-c", "core.quotePath=false", "-C", worktree, "diff", &uarg, "-M", &parent, to, "--", path],
+            &[
+                "git", "-c", "core.quotePath=false", "-C", worktree, "diff", &uarg, "--no-index",
+                "--", "/dev/null", path,
+            ],
             None,
             false,
         )
