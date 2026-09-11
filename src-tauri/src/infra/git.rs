@@ -299,14 +299,17 @@ impl Git {
     }
 
     /// 1 コミット（または未コミット="WORKING"）で変わったファイル一覧。
-    pub fn commit_files(&self, worktree: &str, sha: &str) -> Vec<crate::domain::models::FileChange> {
+    /// from（古い側）の第1親から to（新しい側）までの変更ファイル。
+    /// from == to なら 1 コミット分。複数コミットをまとめて見るときは範囲になる。
+    pub fn commit_files(&self, worktree: &str, from: &str, to: &str) -> Vec<crate::domain::models::FileChange> {
         use crate::domain::models::FileChange;
-        if sha == "WORKING" {
+        if from == "WORKING" {
             return self.working_files(worktree);
         }
         // committed: 第1親との 2-way 差分で name-status（種別・パス）と numstat（増減）を取る。
         // マージコミットで show が出す combined diff（diff --cc / @@@）を避ける。
-        let parent = format!("{sha}^");
+        let parent = format!("{from}^");
+        let sha = to;
         let ns = capture(
             &[
                 "git", "-c", "core.quotePath=false", "-C", worktree, "diff", "--name-status", "-M",
@@ -408,12 +411,13 @@ impl Git {
         map
     }
 
-    /// 指定ファイルの unified diff（コミットヘッダなし）。sha="WORKING" は作業ツリー差分。
-    /// WORKING で追跡差分が空（=未追跡ファイル）のときは全追加として表示する。
+    /// 指定ファイルの unified diff（コミットヘッダなし）。from == to なら 1 コミット分、
+    /// 異なれば from の第1親から to までの範囲。from="WORKING" は作業ツリー差分で、
+    /// 追跡差分が空（=未追跡ファイル）のときは全追加として表示する。
     /// context は前後の文脈行数（-U）。大きくすればファイル全体に近づく。
-    pub fn commit_diff(&self, worktree: &str, sha: &str, path: &str, context: u32) -> String {
+    pub fn commit_diff(&self, worktree: &str, from: &str, to: &str, path: &str, context: u32) -> String {
         let uarg = format!("-U{context}");
-        if sha == "WORKING" {
+        if from == "WORKING" {
             let tracked = capture(
                 &["git", "-c", "core.quotePath=false", "-C", worktree, "diff", &uarg, "HEAD", "--", path],
                 None,
@@ -435,9 +439,9 @@ impl Git {
             .unwrap_or_default();
         }
         // 第1親との 2-way 差分（マージの combined diff を避ける）
-        let parent = format!("{sha}^");
+        let parent = format!("{from}^");
         capture(
-            &["git", "-c", "core.quotePath=false", "-C", worktree, "diff", &uarg, "-M", &parent, sha, "--", path],
+            &["git", "-c", "core.quotePath=false", "-C", worktree, "diff", &uarg, "-M", &parent, to, "--", path],
             None,
             false,
         )

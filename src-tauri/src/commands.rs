@@ -239,13 +239,13 @@ pub async fn commit_log(path: String) -> Result<Vec<crate::domain::models::Commi
 }
 
 #[tauri::command]
-pub async fn commit_files(path: String, sha: String) -> Result<Vec<crate::domain::models::FileChange>, WtError> {
-    run_query(move |ctx| Ok(ctx.git.commit_files(&path, &sha))).await
+pub async fn commit_files(path: String, from: String, to: String) -> Result<Vec<crate::domain::models::FileChange>, WtError> {
+    run_query(move |ctx| Ok(ctx.git.commit_files(&path, &from, &to))).await
 }
 
 #[tauri::command]
-pub async fn commit_diff(path: String, sha: String, file: String, context: u32) -> Result<String, WtError> {
-    run_query(move |ctx| Ok(ctx.git.commit_diff(&path, &sha, &file, context))).await
+pub async fn commit_diff(path: String, from: String, to: String, file: String, context: u32) -> Result<String, WtError> {
+    run_query(move |ctx| Ok(ctx.git.commit_diff(&path, &from, &to, &file, context))).await
 }
 
 #[tauri::command]

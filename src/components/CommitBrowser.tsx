@@ -17,6 +17,45 @@ const WORKING: CommitInfo = {
   body: "",
 };
 
+// 一覧は merge-base..HEAD なので、全コミットをまとめた差分はブランチ全体の差分になる。
+const ALL: CommitInfo = {
+  sha: "ALL",
+  shortSha: "all",
+  subject: "すべてのコミットの差分",
+  author: "",
+  rel: "ブランチ全体",
+  body: "",
+};
+
+const PSEUDO = new Set([WORKING.sha, ALL.sha]);
+
+/// 一覧に疑似エントリを足す。作業ツリーは先頭、ブランチ全体はその次。
+function withPseudo(log: CommitInfo[], dirty: boolean): CommitInfo[] {
+  const list: CommitInfo[] = [];
+  if (dirty) list.push(WORKING);
+  // 1 コミットしかないときは「すべて」がそのコミットと同じ内容になるので出さない。
+  if (log.length > 1) list.push(ALL);
+  return [...list, ...log];
+}
+
+/// 選択（anchor と shift 側の head）から diff の範囲を決める。
+/// from は古い側、to は新しい側。一覧は新しい順なので添字は逆になる。
+function rangeOf(commits: CommitInfo[], anchor: string | null, head: string | null): { from: string; to: string } | null {
+  if (!anchor) return null;
+  if (anchor === WORKING.sha) return { from: WORKING.sha, to: WORKING.sha };
+  const real = commits.filter((c) => !PSEUDO.has(c.sha));
+  if (anchor === ALL.sha) {
+    const oldest = real[real.length - 1];
+    const newest = real[0];
+    return oldest && newest ? { from: oldest.sha, to: newest.sha } : null;
+  }
+  const ai = commits.findIndex((c) => c.sha === anchor);
+  const hi = head ? commits.findIndex((c) => c.sha === head) : -1;
+  if (ai < 0) return null;
+  if (hi < 0 || hi === ai) return { from: anchor, to: anchor };
+  return { from: commits[Math.max(ai, hi)].sha, to: commits[Math.min(ai, hi)].sha };
+}
+
 function basename(p: string): string {
   return p.split("/").pop() ?? p;
 }
@@ -72,7 +111,9 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
   const [commitsW, setCommitsW] = useAtom(browserCommitsWAtom);
   const [treeW, setTreeW] = useAtom(browserTreeWAtom);
   const [commits, setCommits] = useState<CommitInfo[] | null>(null);
-  const [sha, setSha] = useState<string | null>(null);
+  // anchor は通常クリック、head は shift クリックの反対側。両方あれば範囲になる。
+  const [anchor, setAnchor] = useState<string | null>(null);
+  const [head, setHead] = useState<string | null>(null);
   const [files, setFiles] = useState<FileChange[] | null>(null);
   const [file, setFile] = useState<string | null>(null);
   const [diff, setDiff] = useState<string | null>(null);
@@ -110,28 +151,33 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
   useEffect(() => {
     let alive = true;
     setCommits(null);
-    setSha(null);
+    setAnchor(null);
+    setHead(null);
     setFiles(null);
     setFile(null);
     setDiff(null);
     api.commitLog(path).then((log) => {
       if (!alive) return;
-      const list = dirty ? [WORKING, ...log] : log;
+      const list = withPseudo(log, dirty);
       setCommits(list);
-      setSha(list[0]?.sha ?? null);
+      setAnchor(list[0]?.sha ?? null);
     });
     return () => {
       alive = false;
     };
   }, [path, dirty]);
 
+  const sel = rangeOf(commits ?? [], anchor, head);
+  const selFrom = sel?.from ?? null;
+  const selTo = sel?.to ?? null;
+
   useEffect(() => {
-    if (!sha) return;
+    if (!selFrom || !selTo) return;
     let alive = true;
     setFiles(null);
     setFile(null);
     setDiff(null);
-    api.commitFiles(path, sha).then((fs) => {
+    api.commitFiles(path, selFrom, selTo).then((fs) => {
       if (!alive) return;
       setFiles(fs);
       setFile(fs[0]?.path ?? null);
@@ -140,13 +186,15 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
     return () => {
       alive = false;
     };
-  }, [path, sha]);
+  }, [path, selFrom, selTo]);
 
   // 取り直しの合図が来たら、見ている位置を保ったまま中身を更新する。
   // 同じ worktree を開いたままだと上の effect は再実行されず、新しいコミットや
   // 作業ツリーの変更に追従できないため。
-  const shaRef = useRef(sha);
-  shaRef.current = sha;
+  const anchorRef = useRef(anchor);
+  anchorRef.current = anchor;
+  const headRef = useRef(head);
+  headRef.current = head;
   const fileRef = useRef(file);
   fileRef.current = file;
   const ctxRef = useRef(ctxLines);
@@ -160,16 +208,20 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
     void (async () => {
       const log = await api.commitLog(path);
       if (!alive) return;
-      const list = dirty ? [WORKING, ...log] : log;
+      const list = withPseudo(log, dirty);
       setCommits(list);
-      const keep = shaRef.current && list.some((c) => c.sha === shaRef.current);
-      const nextSha = keep ? shaRef.current : (list[0]?.sha ?? null);
-      if (nextSha !== shaRef.current) {
-        setSha(nextSha); // 選択が変わるときは既存の effect が続きを取る
+      const has = (sha: string | null) => !!sha && list.some((c) => c.sha === sha);
+      const nextAnchor = has(anchorRef.current) ? anchorRef.current : (list[0]?.sha ?? null);
+      const nextHead = has(headRef.current) ? headRef.current : null;
+      if (nextAnchor !== anchorRef.current || nextHead !== headRef.current) {
+        // 選択が変わるときは、範囲を見ている effect が続きを取る
+        setAnchor(nextAnchor);
+        setHead(nextHead);
         return;
       }
-      if (!nextSha) return;
-      const fs = await api.commitFiles(path, nextSha);
+      const next = rangeOf(list, nextAnchor, nextHead);
+      if (!next) return;
+      const fs = await api.commitFiles(path, next.from, next.to);
       if (!alive) return;
       setFiles(fs);
       const nextFile = fileRef.current && fs.some((f) => f.path === fileRef.current) ? fileRef.current : (fs[0]?.path ?? null);
@@ -178,7 +230,7 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
         setDiff("");
         return;
       }
-      const d = await api.commitDiff(path, nextSha, nextFile, ctxRef.current);
+      const d = await api.commitDiff(path, next.from, next.to, nextFile, ctxRef.current);
       if (alive) setDiff(d);
     })();
     return () => {
@@ -187,19 +239,19 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
   }, [nonce, path, dirty]);
 
   useEffect(() => {
-    if (!sha || !file) {
+    if (!selFrom || !selTo || !file) {
       setDiff(file ? null : "");
       return;
     }
     let alive = true;
     setDiff(null);
-    api.commitDiff(path, sha, file, ctxLines).then((d) => {
+    api.commitDiff(path, selFrom, selTo, file, ctxLines).then((d) => {
       if (alive) setDiff(d);
     });
     return () => {
       alive = false;
     };
-  }, [path, sha, file, ctxLines]);
+  }, [path, selFrom, selTo, file, ctxLines]);
 
   if (commits === null) {
     return (
@@ -216,22 +268,41 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
     );
   }
 
-  const current = commits.find((c) => c.sha === sha) ?? null;
-  const commitCount = commits.length - (dirty ? 1 : 0);
+  const current = commits.find((c) => c.sha === anchor) ?? null;
+  const commitCount = commits.filter((c) => !PSEUDO.has(c.sha)).length;
+
+  // shift クリックは anchor との間を選ぶ。疑似エントリは範囲に混ぜない
+  // （作業ツリーやブランチ全体はコミットの並びの一部ではないため）。
+  const onRowClick = (c: CommitInfo, e: React.MouseEvent) => {
+    if (e.shiftKey && anchor && !PSEUDO.has(anchor) && !PSEUDO.has(c.sha)) {
+      setHead(c.sha);
+      return;
+    }
+    setAnchor(c.sha);
+    setHead(null);
+  };
+
+  const anchorIdx = commits.findIndex((c) => c.sha === anchor);
+  const headIdx = head ? commits.findIndex((c) => c.sha === head) : -1;
+  const lo = headIdx >= 0 ? Math.min(anchorIdx, headIdx) : anchorIdx;
+  const hi = headIdx >= 0 ? Math.max(anchorIdx, headIdx) : anchorIdx;
+  const selectedCount = hi - lo + 1;
 
   return (
     <div ref={rootRef} className="flex h-full min-h-0 min-w-0 overflow-hidden" style={{ borderTop: "1px solid var(--wt-border)" }}>
       {/* コミット一覧（可変幅） */}
       <div className="flex min-h-0 flex-col overflow-y-auto" style={{ width: commitsW, flexShrink: 0 }}>
         <ColHeader label={`コミット ${commitCount}`} />
-        {commits.map((c) => {
-          const on = c.sha === sha;
-          const working = c.sha === "WORKING";
+        {commits.map((c, i) => {
+          const on = i >= lo && i <= hi;
+          const working = c.sha === WORKING.sha;
+          const all = c.sha === ALL.sha;
           return (
             <button
               key={c.sha}
               type="button"
-              onClick={() => setSha(c.sha)}
+              title={PSEUDO.has(c.sha) ? undefined : "shift + クリックで範囲選択"}
+              onClick={(e) => onRowClick(c, e)}
               className="flex flex-col gap-0.5 px-3 py-2 text-left transition-colors"
               style={{ background: on ? "var(--wt-active)" : "transparent" }}
               onMouseEnter={(e) => !on && (e.currentTarget.style.background = "var(--wt-hover)")}
@@ -239,7 +310,7 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
             >
               <span
                 className="line-clamp-2 text-[12.5px] font-medium"
-                style={{ color: working ? "var(--wt-warn)" : "var(--wt-fg)" }}
+                style={{ color: working ? "var(--wt-warn)" : all ? "var(--wt-info)" : "var(--wt-fg)" }}
               >
                 {c.subject}
               </span>
@@ -257,7 +328,20 @@ export function CommitBrowser({ path, dirty }: { path: string; dirty: boolean })
 
       {/* 右領域: コミット詳細 + (ファイルツリー | diff) */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {current && current.sha !== "WORKING" && (
+        {/* 範囲を見ているときは、どこからどこまでかを出す（1 コミットの詳細は出せない） */}
+        {sel && selectedCount > 1 && (
+          <div className="shrink-0 px-4 py-2.5" style={{ borderBottom: "1px solid var(--wt-border)", background: "var(--wt-panel)" }}>
+            <div className="text-[13px] font-semibold leading-snug">
+              {anchor === ALL.sha ? "すべてのコミットの差分" : `${selectedCount} コミットをまとめた差分`}
+            </div>
+            <div className="mt-1.5 flex items-center gap-2 text-[10.5px]" style={{ color: "var(--wt-muted)" }}>
+              <span className="font-mono">{sel.from.slice(0, 10)}</span>
+              <span>〜</span>
+              <span className="font-mono">{sel.to.slice(0, 10)}</span>
+            </div>
+          </div>
+        )}
+        {current && selectedCount === 1 && current.sha !== WORKING.sha && current.sha !== ALL.sha && (
           <div className="shrink-0 px-4 py-2.5" style={{ borderBottom: "1px solid var(--wt-border)", background: "var(--wt-panel)" }}>
             <div className="text-[13px] font-semibold leading-snug">{current.subject}</div>
             {current.body && (
