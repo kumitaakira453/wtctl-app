@@ -28,8 +28,22 @@ impl Fs {
     /// 対象は npm workspaces の hoist 先（リポジトリ直下）と、vite がローカル導入される
     /// frontend/web の 2 箇所。作った数を返す。
     pub fn link_node_modules(&self, main: &str, worktree: &str) -> WtResult<usize> {
+        let rels = [PathBuf::from("node_modules"), Path::new("frontend").join("web").join("node_modules")];
+        // 一部だけ共有すると、メインと worktree の依存が混ざったまま起動して壊れる。
+        // 1 つでも実体が残っていれば何もしない（その worktree は自前の依存を持っている）。
+        for rel in &rels {
+            let dst = Path::new(worktree).join(rel);
+            let occupied = match std::fs::symlink_metadata(&dst) {
+                Ok(meta) if meta.file_type().is_symlink() => false,
+                Ok(_) => std::fs::read_dir(&dst).map(|mut d| d.next().is_some()).unwrap_or(true),
+                Err(_) => false,
+            };
+            if occupied {
+                return Ok(0);
+            }
+        }
         let mut made = 0;
-        for rel in [PathBuf::from("node_modules"), Path::new("frontend").join("web").join("node_modules")] {
+        for rel in rels {
             let src = Path::new(main).join(&rel);
             let dst = Path::new(worktree).join(&rel);
             if !src.is_dir() {
@@ -42,8 +56,7 @@ impl Fs {
                 Ok(_) if std::fs::read_dir(&dst).map(|mut d| d.next().is_none()).unwrap_or(false) => {
                     std::fs::remove_dir(&dst)?
                 }
-                // 実体があるなら尊重する（npm ci 済みのものを消さない）
-                Ok(_) => continue,
+                Ok(_) => unreachable!("実体がある場合は事前に弾いている"),
                 Err(_) => {}
             }
             if let Some(parent) = dst.parent() {
@@ -55,15 +68,20 @@ impl Fs {
         Ok(made)
     }
 
-    /// vite の実行ファイルを webdir から上へ辿って探す。npm workspaces は依存を
+    /// vite の実行ファイルを webdir から root まで遡って探す。npm workspaces は依存を
     /// リポジトリ直下へ hoist することがあり、その場合 frontend/web 側の node_modules は
-    /// 空になる。node のバイナリ解決と同じく、見つかるまで親を辿る。
-    pub fn vite_bin(&self, webdir: &str) -> Option<String> {
+    /// 空になる。探索は root で打ち切る。worktree はメインの中に置かれるため、
+    /// 越えて遡るとメイン側の vite を掴み、依存がメインと worktree で混ざって起動に失敗する。
+    pub fn vite_bin(&self, webdir: &str, root: &str) -> Option<String> {
+        let root = Path::new(root);
         let mut dir = Path::new(webdir);
         loop {
             let vbin = dir.join("node_modules").join(".bin").join("vite");
             if vbin.exists() {
                 return Some(vbin.to_string_lossy().to_string());
+            }
+            if dir == root {
+                return None;
             }
             dir = dir.parent()?;
         }

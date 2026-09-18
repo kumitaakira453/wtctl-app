@@ -210,7 +210,7 @@ pub fn fe(ctx: &Ctx, worktree: &str, sink: &Sink) -> WtResult<()> {
 
     let vbin = ctx
         .fs
-        .vite_bin(&webdir)
+        .vite_bin(&webdir, worktree)
         .ok_or_else(|| WtError::new(format!("{webdir} から辿れる場所に vite が無い（npm ci 失敗）")))?;
 
     // 単一 Vite 方針: 既存の :3000 を止めてから起動する
@@ -263,7 +263,7 @@ fn ensure_deps(ctx: &Ctx, worktree: &str, webdir: &str, sink: &Sink) -> WtResult
     // 判定は node_modules の有無ではなく vite が引けるかで行う。中身が空になっていても
     // ディレクトリだけは残るため、それを「導入済み」と見なすと npm ci を飛ばし続けて
     // 復旧できなくなる。
-    if ctx.fs.vite_bin(webdir).is_some() && ctx.state.npmci_cache_matches(worktree, &lock_sha) {
+    if ctx.fs.vite_bin(webdir, worktree).is_some() && ctx.state.npmci_cache_matches(worktree, &lock_sha) {
         sink(LogEvent::info("npm ci: skip（lockfile 不変）"));
         return Ok(());
     }
@@ -276,8 +276,9 @@ fn ensure_deps(ctx: &Ctx, worktree: &str, webdir: &str, sink: &Sink) -> WtResult
         let main_lock = Path::new(&main).join("package-lock.json").to_string_lossy().to_string();
         match ctx.fs.file_sha256(&main_lock) {
             Some(main_sha) if main_sha == lock_sha => {
+                // 共有できても vite を引けないなら意味が無いので npm ci に落とす
                 let made = ctx.fs.link_node_modules(&main, worktree)?;
-                if made > 0 || ctx.fs.vite_bin(webdir).is_some() {
+                if made > 0 && ctx.fs.vite_bin(webdir, worktree).is_some() {
                     sink(LogEvent::info("node_modules: main と共有（lockfile 一致）"));
                     return Ok(());
                 }
