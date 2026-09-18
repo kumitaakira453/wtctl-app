@@ -38,6 +38,10 @@ impl Fs {
             match std::fs::symlink_metadata(&dst) {
                 // 既存の symlink は貼り直す（別の worktree を指していることがある）
                 Ok(meta) if meta.file_type().is_symlink() => std::fs::remove_file(&dst)?,
+                // 中身が空なら失った依存は無いので、リンクに置き換える
+                Ok(_) if std::fs::read_dir(&dst).map(|mut d| d.next().is_none()).unwrap_or(false) => {
+                    std::fs::remove_dir(&dst)?
+                }
                 // 実体があるなら尊重する（npm ci 済みのものを消さない）
                 Ok(_) => continue,
                 Err(_) => {}
@@ -51,12 +55,17 @@ impl Fs {
         Ok(made)
     }
 
+    /// vite の実行ファイルを webdir から上へ辿って探す。npm workspaces は依存を
+    /// リポジトリ直下へ hoist することがあり、その場合 frontend/web 側の node_modules は
+    /// 空になる。node のバイナリ解決と同じく、見つかるまで親を辿る。
     pub fn vite_bin(&self, webdir: &str) -> Option<String> {
-        let vbin = Path::new(webdir).join("node_modules").join(".bin").join("vite");
-        if vbin.exists() {
-            Some(vbin.to_string_lossy().to_string())
-        } else {
-            None
+        let mut dir = Path::new(webdir);
+        loop {
+            let vbin = dir.join("node_modules").join(".bin").join("vite");
+            if vbin.exists() {
+                return Some(vbin.to_string_lossy().to_string());
+            }
+            dir = dir.parent()?;
         }
     }
 

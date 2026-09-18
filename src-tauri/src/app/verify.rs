@@ -208,16 +208,17 @@ pub fn fe(ctx: &Ctx, worktree: &str, sink: &Sink) -> WtResult<()> {
         sink(LogEvent::info(format!("env copy: {name}")));
     }
 
-    if ctx.fs.vite_bin(&webdir).is_none() {
-        return Err(WtError::new(format!("{webdir} に vite が無い（npm ci 失敗）")));
-    }
+    let vbin = ctx
+        .fs
+        .vite_bin(&webdir)
+        .ok_or_else(|| WtError::new(format!("{webdir} から辿れる場所に vite が無い（npm ci 失敗）")))?;
 
     // 単一 Vite 方針: 既存の :3000 を止めてから起動する
     free_main_port(ctx, port, sink);
 
     let log_path = ctx.state.vite_log_path(port);
     sink(LogEvent::info(format!("vite --port {port} --strictPort (log: {log_path})")));
-    let (pid, lstart) = ctx.process.spawn_vite(&webdir, port, &log_path)?;
+    let (pid, lstart) = ctx.process.spawn_vite(&vbin, &webdir, port, &log_path)?;
     ctx.state.save_vite(&ViteProcess {
         port,
         pid,
@@ -259,8 +260,10 @@ fn ensure_deps(ctx: &Ctx, worktree: &str, webdir: &str, sink: &Sink) -> WtResult
         .fs
         .file_sha256(&lock)
         .ok_or_else(|| WtError::new(format!("{lock} が無い")))?;
-    let node_modules = Path::new(webdir).join("node_modules").to_string_lossy().to_string();
-    if ctx.fs.is_dir(&node_modules) && ctx.state.npmci_cache_matches(worktree, &lock_sha) {
+    // 判定は node_modules の有無ではなく vite が引けるかで行う。中身が空になっていても
+    // ディレクトリだけは残るため、それを「導入済み」と見なすと npm ci を飛ばし続けて
+    // 復旧できなくなる。
+    if ctx.fs.vite_bin(webdir).is_some() && ctx.state.npmci_cache_matches(worktree, &lock_sha) {
         sink(LogEvent::info("npm ci: skip（lockfile 不変）"));
         return Ok(());
     }

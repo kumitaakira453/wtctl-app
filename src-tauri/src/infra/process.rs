@@ -70,10 +70,11 @@ impl Process {
         !lstart.is_empty() && self.lstart(pid) == lstart
     }
 
-    pub fn spawn_vite(&self, webdir: &str, port: u16, log_path: &str) -> WtResult<(i64, String)> {
-        let vbin = Path::new(webdir).join("node_modules").join(".bin").join("vite");
-        if !vbin.exists() {
-            return Err(WtError::new(format!("{} が実行できない", vbin.to_string_lossy())));
+    /// vbin は探索済みの vite 実行ファイル。webdir 直下にあるとは限らない
+    /// （npm workspaces がリポジトリ直下へ hoist する）。
+    pub fn spawn_vite(&self, vbin: &str, webdir: &str, port: u16, log_path: &str) -> WtResult<(i64, String)> {
+        if !Path::new(vbin).exists() {
+            return Err(WtError::new(format!("{vbin} が実行できない")));
         }
         let log = File::create(log_path)?;
         let err = log.try_clone()?;
