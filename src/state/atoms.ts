@@ -124,6 +124,8 @@ export interface ActionTab {
   title: string;
   log: LogEvent[];
   running: boolean;
+  /// 実行中に中断するための id（backend の channel id）。
+  actionId?: number;
   result: "ok" | "error" | null;
   scope: ActionScope;
 }

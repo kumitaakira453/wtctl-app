@@ -3,7 +3,10 @@
 //! `capture` は出力を取得して返す。`stream` は行単位で Sink（ログ出力先）へ流す。
 
 use std::io::{BufRead, BufReader};
+use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
+
+use crate::infra::cancel;
 
 use crate::error::{WtError, WtResult};
 use crate::event::{LogEvent, Sink};
@@ -40,9 +43,20 @@ pub fn stream(cmd: &[&str], cwd: Option<&str>, check: bool, sink: &Sink) -> WtRe
         c.current_dir(dir);
     }
     c.stdout(Stdio::piped()).stderr(Stdio::piped());
+    // 中断時に孫まで止められるよう、独立したプロセスグループで起動する
+    c.process_group(0);
+    let action = cancel::current();
+    if cancel::is_cancelled(action) {
+        return Err(WtError::new("中断しました"));
+    }
     let mut child = c
         .spawn()
         .map_err(|e| WtError::new(format!("{} の起動に失敗: {e}", cmd[0])))?;
+    let pid = child.id();
+    if !cancel::register(pid) {
+        let _ = child.kill();
+        return Err(WtError::new("中断しました"));
+    }
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
 
@@ -64,6 +78,10 @@ pub fn stream(cmd: &[&str], cwd: Option<&str>, check: bool, sink: &Sink) -> WtRe
     });
 
     let status = child.wait()?;
+    cancel::unregister(pid);
+    if cancel::is_cancelled(action) {
+        return Err(WtError::new("中断しました"));
+    }
     if check && !status.success() {
         return Err(WtError::new(format!(
             "コマンドが失敗しました (exit {})",

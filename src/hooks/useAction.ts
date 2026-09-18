@@ -68,10 +68,15 @@ export function useActionRunner(afterDone: () => void) {
       const runOne = async (s: Step): Promise<boolean> => {
         setTabs((tabs) => tabs.map((t) => (t.id === s.id ? { ...t, running: true } : t)));
         try {
-          await runAction(s.cmd, s.args, (e) =>
-            setTabs((tabs) => tabs.map((t) => (t.id === s.id ? { ...t, log: [...t.log, e] } : t))),
+          await runAction(
+            s.cmd,
+            s.args,
+            (e) => setTabs((tabs) => tabs.map((t) => (t.id === s.id ? { ...t, log: [...t.log, e] } : t))),
+            (actionId) => setTabs((tabs) => tabs.map((t) => (t.id === s.id ? { ...t, actionId } : t))),
           );
-          setTabs((tabs) => tabs.map((t) => (t.id === s.id ? { ...t, running: false, result: "ok" } : t)));
+          setTabs((tabs) =>
+            tabs.map((t) => (t.id === s.id ? { ...t, running: false, result: "ok", actionId: undefined } : t)),
+          );
           return true;
         } catch (err) {
           setTabs((tabs) =>
@@ -81,6 +86,7 @@ export function useActionRunner(afterDone: () => void) {
                     ...t,
                     running: false,
                     result: "error",
+                    actionId: undefined,
                     log: [...t.log, { kind: "error", text: errorMessage(err) }],
                   }
                 : t,

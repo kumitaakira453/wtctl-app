@@ -14,6 +14,7 @@ use serde_json::Value;
 use tauri::ipc::Channel;
 
 use crate::app::ctx::Ctx;
+use crate::infra::cancel;
 use crate::app::{health, migration, query, restore, stack, teardown, verify, worktree};
 use crate::domain::models::{BranchInfo, PrInfo, VerifyPlan};
 use crate::domain::topology::PROJECT;
@@ -40,6 +41,21 @@ where
     .map_err(|e| WtError::new(e.to_string()))?
 }
 
+/// アクションの紐づけを確実に外すためのガード。
+struct ActionGuard(u32);
+
+impl Drop for ActionGuard {
+    fn drop(&mut self) {
+        cancel::end(self.0);
+    }
+}
+
+/// 実行中のアクションを中断する。id は実行時に渡した channel の id。
+#[tauri::command]
+pub fn cancel_action(action: u32) -> usize {
+    cancel::cancel(action)
+}
+
 /// action に名前を与えると、docker スタックの排他ロックを取ってから実行する。
 /// 取得できなければ実行せずエラーを返す（他の操作と重ねて compose を叩かない）。
 async fn run_action_with<F>(
@@ -50,10 +66,15 @@ async fn run_action_with<F>(
 where
     F: FnOnce(&Ctx, &Sink) -> WtResult<()> + Send + 'static,
 {
+    let action_id = channel.id();
     tauri::async_runtime::spawn_blocking(move || {
         let sink = move |e: LogEvent| {
             let _ = channel.send(e);
         };
+        // 中断要求の宛先になるよう、実行中はこのスレッドをアクションに紐づける。
+        // 途中で return しても解除されるよう Drop で外す。
+        cancel::begin(action_id);
+        let _guard = ActionGuard(action_id);
         let s: &Sink = &sink;
         // ロックはワーカースレッド内で保持し、この関数を抜けた時点で必ず解放する。
         let _lock = match action.map(lock::acquire).transpose() {

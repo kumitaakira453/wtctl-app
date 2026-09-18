@@ -47,14 +47,22 @@ export const api = {
 };
 
 /// アクション系コマンド。実行ログを onLog で逐次受け取り、完了時に resolve / 失敗で reject。
+/// onStart には中断に使う channel の id を渡す。backend はこの id で
+/// 実行中の子プロセスを引けるようにしている。
 export function runAction(
   cmd: string,
   args: Record<string, unknown>,
   onLog: (e: LogEvent) => void,
+  onStart?: (actionId: number) => void,
 ): Promise<void> {
   const channel = new Channel<LogEvent>();
   channel.onmessage = onLog;
+  onStart?.(channel.id);
   return invoke<void>(cmd, { ...args, channel });
+}
+
+export function cancelAction(actionId: number): Promise<number> {
+  return invoke<number>("cancel_action", { action: actionId });
 }
 
 /// docker logs -f を開始し、行ごとに onLine を呼ぶ。停止用の stream id を返す。

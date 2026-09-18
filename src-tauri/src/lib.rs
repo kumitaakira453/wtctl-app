@@ -78,6 +78,7 @@ pub fn run() {
             commands::claude_sessions,
             commands::claude_transcript,
             commands::claude_image,
+            commands::cancel_action,
             commands::start_container_logs,
             commands::stop_container_logs,
             commands::verify,

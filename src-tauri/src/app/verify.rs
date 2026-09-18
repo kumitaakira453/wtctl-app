@@ -263,7 +263,10 @@ fn ensure_deps(ctx: &Ctx, worktree: &str, webdir: &str, sink: &Sink) -> WtResult
     // 判定は node_modules の有無ではなく vite が引けるかで行う。中身が空になっていても
     // ディレクトリだけは残るため、それを「導入済み」と見なすと npm ci を飛ばし続けて
     // 復旧できなくなる。
-    if ctx.fs.vite_bin(webdir, worktree).is_some() && ctx.state.npmci_cache_matches(worktree, &lock_sha) {
+    if ctx.fs.vite_bin(webdir, worktree).is_some()
+        && ctx.state.npmci_cache_matches(worktree, &lock_sha)
+        && !ctx.state.npmci_interrupted(worktree)
+    {
         sink(LogEvent::info("npm ci: skip（lockfile 不変）"));
         return Ok(());
     }
@@ -287,8 +290,15 @@ fn ensure_deps(ctx: &Ctx, worktree: &str, webdir: &str, sink: &Sink) -> WtResult
             None => {}
         }
     }
-    sink(LogEvent::info("npm ci 実行（数分かかる場合あり）"));
+    // 前回が中断されていると node_modules が中途半端に残る。npm ci は入れ直す前に
+    // 消すので、そのまま実行すれば直る。記録は消して、途中の状態を導入済みと見なさない。
+    if ctx.state.npmci_interrupted(worktree) {
+        sink(LogEvent::warn("前回の npm ci が完了していません。入れ直します"));
+    }
+    sink(LogEvent::info("npm ci 実行（数分かかる場合あり。中断できます）"));
+    ctx.state.npmci_started(worktree)?;
     ctx.process.npm_ci(worktree, sink)?;
+    ctx.state.npmci_finished(worktree);
     ctx.state.store_npmci_cache(worktree, &lock_sha)?;
     Ok(())
 }

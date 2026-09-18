@@ -134,6 +134,25 @@ impl State {
         let _ = std::fs::remove_file(self.venv_path(service));
     }
 
+    /// npm ci 実行中の目印。完了前に中断されるとこれが残り、次回に作り直すきっかけになる。
+    fn npmci_progress_path(&self, worktree: &str) -> PathBuf {
+        self.dir.join(format!("npmci-{}.inprogress", image_suffix(worktree)))
+    }
+
+    pub fn npmci_started(&self, worktree: &str) -> WtResult<()> {
+        std::fs::write(self.npmci_progress_path(worktree), "")?;
+        Ok(())
+    }
+
+    pub fn npmci_finished(&self, worktree: &str) {
+        let _ = std::fs::remove_file(self.npmci_progress_path(worktree));
+    }
+
+    /// 前回の npm ci が完了しないまま終わっているか。
+    pub fn npmci_interrupted(&self, worktree: &str) -> bool {
+        self.npmci_progress_path(worktree).exists()
+    }
+
     pub fn npmci_cache_matches(&self, worktree: &str, lock_sha: &str) -> bool {
         let path = self.npmci_path(worktree);
         std::fs::read_to_string(&path).map(|s| s.trim() == lock_sha).unwrap_or(false)

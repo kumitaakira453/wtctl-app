@@ -1,6 +1,7 @@
 import { useAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { stripAnsi, TONE_COLOR, toneOf } from "../lib/ansi";
+import { cancelAction } from "../lib/ipc";
 import { actionActiveAtom, actionOpenAtom, actionTabsAtom } from "../state/atoms";
 import { Icon } from "./Icon";
 import { IconButton, Spinner } from "./ui";
@@ -102,6 +103,19 @@ export function LogDrawer() {
             );
           })}
         </div>
+        {/* 実行中は打ち切れるようにする。npm ci のように数分かかるものを待つしかない状態を作らない */}
+        {current.running && current.actionId != null && (
+          <button
+            type="button"
+            onClick={() => void cancelAction(current.actionId!)}
+            title="この処理を中断する"
+            className="flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors"
+            style={{ color: "var(--wt-danger)", border: "1px solid var(--wt-danger)" }}
+          >
+            <Icon name="stop" size={13} />
+            中断
+          </button>
+        )}
         <IconButton icon={copied ? "check" : "content_copy"} onClick={copy} title="このタブのログをコピー" size={17} />
         <IconButton icon="close" onClick={closeDrawer} title="閉じる（完了したタブは破棄）" size={18} />
       </div>

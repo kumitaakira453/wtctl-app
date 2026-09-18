@@ -24,24 +24,11 @@ impl Fs {
         Some(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
     }
 
-    /// worktree の node_modules をメインへの symlink にする。既に実体があるものは触らない。
+    /// worktree の node_modules をメインへの symlink にする。実体が残っていれば捨てる。
     /// 対象は npm workspaces の hoist 先（リポジトリ直下）と、vite がローカル導入される
     /// frontend/web の 2 箇所。作った数を返す。
     pub fn link_node_modules(&self, main: &str, worktree: &str) -> WtResult<usize> {
         let rels = [PathBuf::from("node_modules"), Path::new("frontend").join("web").join("node_modules")];
-        // 一部だけ共有すると、メインと worktree の依存が混ざったまま起動して壊れる。
-        // 1 つでも実体が残っていれば何もしない（その worktree は自前の依存を持っている）。
-        for rel in &rels {
-            let dst = Path::new(worktree).join(rel);
-            let occupied = match std::fs::symlink_metadata(&dst) {
-                Ok(meta) if meta.file_type().is_symlink() => false,
-                Ok(_) => std::fs::read_dir(&dst).map(|mut d| d.next().is_some()).unwrap_or(true),
-                Err(_) => false,
-            };
-            if occupied {
-                return Ok(0);
-            }
-        }
         let mut made = 0;
         for rel in rels {
             let src = Path::new(main).join(&rel);
@@ -52,11 +39,10 @@ impl Fs {
             match std::fs::symlink_metadata(&dst) {
                 // 既存の symlink は貼り直す（別の worktree を指していることがある）
                 Ok(meta) if meta.file_type().is_symlink() => std::fs::remove_file(&dst)?,
-                // 中身が空なら失った依存は無いので、リンクに置き換える
-                Ok(_) if std::fs::read_dir(&dst).map(|mut d| d.next().is_none()).unwrap_or(false) => {
-                    std::fs::remove_dir(&dst)?
-                }
-                Ok(_) => unreachable!("実体がある場合は事前に弾いている"),
+                // 共有を選んでいる以上、worktree が持っている実体は捨てて置き換える。
+                // 残すとメインと worktree の依存が混ざったまま起動して壊れる。
+                // lockfile が一致するときしか呼ばれないので、失われる内容は無い。
+                Ok(_) => std::fs::remove_dir_all(&dst)?,
                 Err(_) => {}
             }
             if let Some(parent) = dst.parent() {
