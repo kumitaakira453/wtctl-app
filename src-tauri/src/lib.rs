@@ -72,6 +72,7 @@ pub fn run() {
             commands::disk_size,
             commands::is_dirty,
             commands::migration_show,
+            commands::migration_compare,
             commands::commit_log,
             commands::commit_files,
             commands::commit_diff,
@@ -95,7 +96,8 @@ pub fn run() {
             commands::delete_worktree,
             commands::teardown_worktree,
             commands::migration_apply_all,
-            commands::migration_rollback_to_base
+            commands::migration_rollback_to_base,
+            commands::migration_rollback_to_target
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

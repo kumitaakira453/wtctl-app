@@ -4,6 +4,7 @@
 //! 「base へ巻き戻す」の 2 方向に集約する。
 
 use crate::app::ctx::Ctx;
+use crate::domain::models::MigrationCompare;
 use crate::domain::topology::group;
 use crate::error::{WtError, WtResult};
 use crate::event::{LogEvent, Sink};
@@ -18,6 +19,40 @@ fn container(group_key: &str) -> WtResult<&'static str> {
 pub fn rollback_target(ctx: &Ctx, worktree: &str, appdir: &str, base: Option<&str>) -> String {
     let names = ctx.git.migration_names_at(worktree, appdir, base);
     names.last().cloned().unwrap_or_else(|| "zero".to_string())
+}
+
+/// 2 つの ref の間で migration を比べる。DB ではなく git の一覧どうしを突き合わせる。
+/// 巻き戻し先は「両方に存在する最後の migration」で、base 時点とは限らない
+/// （分岐後に共通の migration が入ることがある）。
+pub fn compare(
+    ctx: &Ctx,
+    worktree: &str,
+    from_ref: &str,
+    to_ref: &str,
+    group_key: &str,
+    app: &str,
+    appdir: &str,
+) -> MigrationCompare {
+    let from = ctx.git.migration_names_at(worktree, appdir, Some(from_ref));
+    let to = ctx.git.migration_names_at(worktree, appdir, Some(to_ref));
+
+    let common: Vec<String> = from.iter().filter(|n| to.contains(n)).cloned().collect();
+    // 分岐点は「差し替え中のブランチの並びを後ろから見て、相手にもある最初のもの」
+    let fork_point = from.iter().rev().find(|n| to.contains(n)).cloned();
+
+    let mut rollback: Vec<String> = from.iter().filter(|n| !to.contains(n)).cloned().collect();
+    rollback.reverse(); // 新しい順（戻す順番）
+    let apply: Vec<String> = to.iter().filter(|n| !from.contains(n)).cloned().collect();
+
+    MigrationCompare {
+        group: group_key.to_string(),
+        app: app.to_string(),
+        appdir: appdir.to_string(),
+        common,
+        fork_point,
+        rollback,
+        apply,
+    }
 }
 
 /// 検出した全グループの migration を適用する（進める）。
@@ -40,6 +75,18 @@ pub fn ensure_stack(ctx: &Ctx, sink: &Sink) -> WtResult<()> {
         }
         sink(LogEvent::success("BE を起動しました"));
     }
+    Ok(())
+}
+
+/// 比較で求めた分岐点まで巻き戻す。apps は (group, app, target) の並びで、
+/// target は両ブランチ共通の最後の migration（無ければ "zero"）。
+pub fn rollback_to_target(ctx: &Ctx, apps: &[(String, String, String)], sink: &Sink) -> WtResult<()> {
+    ensure_stack(ctx, sink)?;
+    for (grp, app, target) in apps {
+        sink(LogEvent::info(format!("{grp}/{app} を {target} まで巻き戻します")));
+        ctx.docker.migrate(container(grp)?, Some(app), Some(target), sink)?;
+    }
+    sink(LogEvent::success("分岐点まで巻き戻しました"));
     Ok(())
 }
 

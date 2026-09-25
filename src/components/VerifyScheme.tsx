@@ -3,11 +3,11 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/ipc";
 import { feActiveFor, samePath } from "../lib/status";
 import { GROUPS } from "../lib/topology";
-import type { VerifyPlan, WorktreeEntry } from "../lib/types";
+import type { MigrationCompare, VerifyPlan, WorktreeEntry } from "../lib/types";
 import { useApp, type Step } from "../state/app";
 import { actionBusyAtom, mountsAtom, vitesAtom } from "../state/atoms";
 import { Icon } from "./Icon";
-import { Badge, Button, CheckBox, Modal } from "./ui";
+import { Badge, Button, CheckBox, Modal, Spinner } from "./ui";
 
 /// 全幅・均一な行。左にチェック、右に任意の trailing 要素。
 function Row({
@@ -58,33 +58,41 @@ function Row({
 }
 
 /// migration を group/app ごとにまとめたツリー表示。各 app の適用件数も示す。
-function MigrationTree({ migrations }: { migrations: { group: string; app: string; name: string; label: string }[] }) {
-  // 表示順を保ったまま group/app でまとめる
-  const tree: { key: string; group: string; app: string; names: string[] }[] = [];
-  for (const m of migrations) {
-    const key = `${m.group}/${m.app}`;
-    let node = tree.find((t) => t.key === key);
-    if (!node) {
-      node = { key, group: m.group, app: m.app, names: [] };
-      tree.push(node);
-    }
-    node.names.push(m.name);
-  }
+/// 分岐点を挟んで、巻き戻す分と適用する分を上下に並べる。
+/// どこまで戻ってどこから進むのかが 1 本の線で追えるようにする。
+function MigrationTree({ compares }: { compares: MigrationCompare[] }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      {tree.map((node) => (
-        <div key={node.key}>
+    <div className="flex flex-col gap-2">
+      {compares.map((c) => (
+        <div key={`${c.group}/${c.app}`}>
           <div className="flex items-center gap-1.5 text-[11px]">
             <Icon name="folder" size={12} style={{ color: "var(--wt-muted)" }} />
             <span className="font-mono" style={{ color: "var(--wt-fg-dim)" }}>
-              {node.group}/{node.app}
+              {c.group}/{c.app}
             </span>
-            <span style={{ color: "var(--wt-muted)" }}>({node.names.length})</span>
+            {c.rollback.length === 0 && c.apply.length === 0 && (
+              <span style={{ color: "var(--wt-muted)" }}>変更なし</span>
+            )}
           </div>
           <div className="ml-2 flex flex-col gap-0.5 pl-2" style={{ borderLeft: "1px solid var(--wt-border)" }}>
-            {node.names.map((name, i) => (
+            {c.rollback.map((name) => (
               <div key={name} className="flex items-center gap-1.5 font-mono text-[11px]">
-                <span style={{ color: "var(--wt-muted)", opacity: 0.6 }}>{i + 1}.</span>
+                <Icon name="arrow_downward" size={11} style={{ color: "var(--wt-danger)" }} />
+                <span className="truncate" style={{ color: "var(--wt-danger)" }}>{name}</span>
+              </div>
+            ))}
+            {/* 分岐点。ここまで戻せば両ブランチが揃う */}
+            <div className="flex items-center gap-1.5 font-mono text-[11px]">
+              <Icon name="call_split" size={11} style={{ color: "var(--wt-muted)" }} />
+              <span className="truncate" style={{ color: "var(--wt-muted)" }}>
+                {c.forkPoint ?? "zero"}
+              </span>
+              <span className="shrink-0" style={{ color: "var(--wt-muted)", opacity: 0.7 }}>
+                分岐点{c.common.length > 0 ? `（共通 ${c.common.length}）` : ""}
+              </span>
+            </div>
+            {c.apply.map((name) => (
+              <div key={name} className="flex items-center gap-1.5 font-mono text-[11px]">
                 <Icon name="arrow_upward" size={11} style={{ color: "var(--wt-ok)" }} />
                 <span className="truncate" style={{ color: "var(--wt-fg-dim)" }}>{name}</span>
               </div>
@@ -145,6 +153,25 @@ export function VerifyScheme({
 
   const migGroups = Array.from(new Set(plan.migrations.map((m) => m.group)));
 
+  // 巻き戻しの要否は差し替え中のブランチとの比較で決まる。開くのを待たせないよう後から出す。
+  const [compares, setCompares] = useState<MigrationCompare[] | null>(null);
+  useEffect(() => {
+    if (plan.migrations.length === 0) {
+      setCompares([]);
+      return;
+    }
+    let alive = true;
+    api
+      .migrationCompare(worktree.path)
+      .then((c) => alive && setCompares(c))
+      .catch(() => alive && setCompares([]));
+    return () => {
+      alive = false;
+    };
+  }, [worktree.path, plan]);
+
+  const rollbackApps = (compares ?? []).filter((c) => c.rollback.length > 0);
+
   const migrationSub =
     plan.migrations.length === 0 ? "新規 migration なし" : `${plan.migrations.length} 件（${migGroups.join(", ")}）`;
 
@@ -160,6 +187,22 @@ export function VerifyScheme({
     // FE は docker に依存しないので BE 差し替え・migration を待たずに先行させる。
     if (fe) {
       steps.push({ id: "fe", title: "FE 起動", cmd: "fe", args: { path: worktree.path }, parallel: true });
+    }
+    // 巻き戻しは差し替えより前。コンテナが切り替わると戻す先の migration ファイルが
+    // 消えて `migrate <app> <名前>` が引けなくなる。
+    if (migration && rollbackApps.length > 0) {
+      steps.push({
+        id: "migration-rollback",
+        title: "migration 巻き戻し",
+        cmd: "migration_rollback_to_target",
+        args: {
+          apps: rollbackApps.map((c) => ({
+            group: c.group,
+            app: c.app,
+            target: c.forkPoint ?? "zero",
+          })),
+        },
+      });
     }
     if (groups.size > 0) {
       steps.push({
@@ -285,7 +328,13 @@ export function VerifyScheme({
                     <b>{plan.migrations.length}</b> 件を適用（進める）
                   </span>
                 </div>
-                <MigrationTree migrations={plan.migrations} />
+                {compares === null ? (
+                  <div className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--wt-muted)" }}>
+                    <Spinner size={11} /> 差分を確認中…
+                  </div>
+                ) : (
+                  <MigrationTree compares={compares} />
+                )}
               </div>
             )}
           </Row>

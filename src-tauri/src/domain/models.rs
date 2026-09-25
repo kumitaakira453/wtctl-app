@@ -86,6 +86,23 @@ impl Migration {
     }
 }
 
+/// migration をブランチ間で比べた結果。共通部分と、各ブランチ固有の並びに分ける。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MigrationCompare {
+    pub group: String,
+    pub app: String,
+    pub appdir: String,
+    /// 両方に存在する migration（古い順）
+    pub common: Vec<String>,
+    /// 共通部分の最後。ここまで巻き戻せば両ブランチが揃う。無ければ None（= zero）
+    pub fork_point: Option<String>,
+    /// 差し替え中のブランチ側にだけある migration（新しい順）。巻き戻しの対象。
+    pub rollback: Vec<String>,
+    /// これから差し替えるブランチ側にだけある migration（古い順）。適用の対象。
+    pub apply: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerifyPlan {

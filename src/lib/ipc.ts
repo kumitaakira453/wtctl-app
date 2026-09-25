@@ -10,6 +10,7 @@ import type {
   LiveResult,
   LogEvent,
   MetaEntry,
+  MigrationCompare,
   PrInfo,
   RepoStatus,
   VerifyPlan,
@@ -39,6 +40,7 @@ export const api = {
     invoke<FileChange[]>("commit_files", { path, from, to }),
   commitDiff: (path: string, from: string, to: string, file: string, context: number) =>
     invoke<string>("commit_diff", { path, from, to, file, context }),
+  migrationCompare: (path: string) => invoke<MigrationCompare[]>("migration_compare", { path }),
   claudeSessions: (path: string) => invoke<ClaudeSession[]>("claude_sessions", { path }),
   claudeTranscript: (path: string, session: string) =>
     invoke<ClaudeMessage[]>("claude_transcript", { path, session }),

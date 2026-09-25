@@ -66,6 +66,16 @@ export interface Migration {
   label: string;
 }
 
+export interface MigrationCompare {
+  group: string;
+  app: string;
+  appdir: string;
+  common: string[];
+  forkPoint: string | null;
+  rollback: string[];
+  apply: string[];
+}
+
 export interface VerifyPlan {
   groups: string[];
   buildGroups: string[];

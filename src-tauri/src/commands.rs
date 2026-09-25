@@ -249,6 +249,34 @@ pub async fn is_dirty(path: String) -> Result<bool, WtError> {
     run_query(move |ctx| Ok(query::is_dirty(ctx, &path))).await
 }
 
+/// 差し替え中のブランチと対象 worktree の間で migration を比べる。
+/// 差し替えが無ければ main のブランチが比較元になる。
+#[tauri::command]
+pub async fn migration_compare(path: String) -> Result<Vec<crate::domain::models::MigrationCompare>, WtError> {
+    run_query(move |ctx| {
+        let plan = query::plan_for(ctx, &path);
+        let swaps = ctx.state.load_swaps();
+        // 今 BE に載っている worktree（複数あれば最初の 1 つ）。無ければ main。
+        let current_wt = swaps.values().next().map(|s| s.wt.clone());
+        let from_ref = match &current_wt {
+            Some(wt) => ctx.git.current_branch(wt),
+            None => ctx.git.current_branch(&ctx.git.main_path()?),
+        };
+        let to_ref = ctx.git.current_branch(&path);
+        let mut out = Vec::new();
+        let mut seen: Vec<(String, String)> = Vec::new();
+        for m in &plan.migrations {
+            if seen.iter().any(|(g, a)| g == &m.group && a == &m.app) {
+                continue;
+            }
+            seen.push((m.group.clone(), m.app.clone()));
+            out.push(migration::compare(ctx, &path, &from_ref, &to_ref, &m.group, &m.app, &m.appdir));
+        }
+        Ok(out)
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn migration_show(group: String, app: String) -> Result<String, WtError> {
     run_query(move |ctx| migration::show(ctx, &group, &app)).await
@@ -441,6 +469,28 @@ pub struct AppRef {
     group: String,
     app: String,
     appdir: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RollbackTargetRef {
+    group: String,
+    app: String,
+    target: String,
+}
+
+/// 比較で求めた分岐点まで巻き戻す。差し替えより前に実行する。
+#[tauri::command]
+pub async fn migration_rollback_to_target(
+    apps: Vec<RollbackTargetRef>,
+    channel: Channel<LogEvent>,
+) -> Result<(), WtError> {
+    run_stack_action("migration 巻き戻し", channel, move |ctx, sink| {
+        let tuples: Vec<(String, String, String)> =
+            apps.into_iter().map(|a| (a.group, a.app, a.target)).collect();
+        migration::rollback_to_target(ctx, &tuples, sink)
+    })
+    .await
 }
 
 #[tauri::command]
