@@ -256,13 +256,19 @@ pub async fn migration_compare(path: String) -> Result<Vec<crate::domain::models
     run_query(move |ctx| {
         let plan = query::plan_for(ctx, &path);
         let swaps = ctx.state.load_swaps();
-        // 今 BE に載っている worktree（複数あれば最初の 1 つ）。無ければ main。
-        let current_wt = swaps.values().next().map(|s| s.wt.clone());
-        let from_ref = match &current_wt {
-            Some(wt) => ctx.git.current_branch(wt),
-            None => ctx.git.current_branch(&ctx.git.main_path()?),
-        };
+        let main = ctx.git.main_path()?;
+        // 今 BE に載っている worktree（複数あれば最初の 1 つ）。削除済みの worktree を
+        // 指したまま記録が残ることがあるので、ブランチを引けなければ main を比較元にする。
+        let from_ref = swaps
+            .values()
+            .next()
+            .map(|s| ctx.git.current_branch(&s.wt))
+            .filter(|b| !b.is_empty())
+            .unwrap_or_else(|| ctx.git.current_branch(&main));
         let to_ref = ctx.git.current_branch(&path);
+        if from_ref.is_empty() || to_ref.is_empty() {
+            return Err(WtError::new("比較するブランチを特定できません"));
+        }
         let mut out = Vec::new();
         let mut seen: Vec<(String, String)> = Vec::new();
         for m in &plan.migrations {

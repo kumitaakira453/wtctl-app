@@ -191,8 +191,9 @@ impl Git {
 
     pub fn migration_names_at(&self, worktree: &str, appdir: &str, base: Option<&str>) -> Vec<String> {
         let base = match base {
-            Some(b) => b,
-            None => return vec![],
+            // 空の ref は ls-tree が fatal になり、migration が無いのと見分けが付かない
+            Some(b) if !b.trim().is_empty() => b,
+            _ => return vec![],
         };
         let out = capture(
             &[

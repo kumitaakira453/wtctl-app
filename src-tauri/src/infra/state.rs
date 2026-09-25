@@ -59,15 +59,19 @@ impl State {
     }
 
     // --- swaps ---
+    /// 差し替えの記録。worktree を消しても記録は残るため、実体が無いものは落とす。
+    /// 残すと比較元のブランチを引けず、差分の判定が壊れる。
     pub fn load_swaps(&self) -> Swaps {
         let path = self.swaps_path();
         if !path.exists() {
             return Swaps::new();
         }
-        std::fs::read_to_string(&path)
+        let mut swaps: Swaps = std::fs::read_to_string(&path)
             .ok()
             .and_then(|t| serde_json::from_str::<Swaps>(&t).ok())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        swaps.retain(|_, s| Path::new(&s.wt).is_dir());
+        swaps
     }
 
     pub fn save_swaps(&self, swaps: &Swaps) -> WtResult<()> {
